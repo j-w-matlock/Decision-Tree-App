@@ -1,15 +1,16 @@
 import os
-import json
 import streamlit as st
 import streamlit.components.v1 as components
 
-# Folder of this file
+# Path to this component folder
 _component_dir = os.path.dirname(os.path.abspath(__file__))
-
-# In prod, React build is at st_react_flow/build
 _build_dir = os.path.join(_component_dir, "build")
 
-# Declare component for prod bundle
+# Verify build directory exists
+if not os.path.exists(_build_dir):
+    st.warning(f"⚠️ React Flow build directory not found: {_build_dir}")
+
+# Declare the production component
 _react_flow_prod = components.declare_component(
     "react_flow_canvas_prod",
     path=_build_dir
@@ -17,17 +18,15 @@ _react_flow_prod = components.declare_component(
 
 def react_flow(key: str, value=None, dev: bool = False):
     """
-    Streamlit wrapper. If dev=True, expects Vite dev server running at :5173.
-    Otherwise serves the bundled build in st_react_flow/build.
+    Streamlit wrapper for the React Flow decision tree component.
+    If dev=True, connects to the Vite dev server (localhost:5173).
+    Otherwise, uses the compiled assets in st_react_flow/build.
     """
     if dev:
-        # Connect to dev server
         _react_flow_dev = components.declare_component(
             "react_flow_canvas_dev",
             url="http://localhost:5173"
         )
-        data = _react_flow_dev(key=key, value=value, default=value or {})
+        return _react_flow_dev(key=key, value=value, default=value or {})
     else:
-        data = _react_flow_prod(key=key, value=value, default=value or {})
-
-    return data
+        return _react_flow_prod(key=key, value=value, default=value or {})
