@@ -11,13 +11,13 @@ if "graph" not in st.session_state:
 
 # ---- Toolbar ----
 st.subheader("Toolbar")
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
     if st.button("+ Event"):
         st.session_state.graph["nodes"].append({
             "id": f"n{len(st.session_state.graph['nodes']) + 1}",
             "type": "default",
-            "position": {"x": 100, "y": 100},
+            "position": {"x": 100 + 50 * len(st.session_state.graph["nodes"]), "y": 100},
             "data": {"label": "Event"}
         })
 with col2:
@@ -25,7 +25,7 @@ with col2:
         st.session_state.graph["nodes"].append({
             "id": f"n{len(st.session_state.graph['nodes']) + 1}",
             "type": "default",
-            "position": {"x": 200, "y": 100},
+            "position": {"x": 100 + 50 * len(st.session_state.graph["nodes"]), "y": 200},
             "data": {"label": "Decision"}
         })
 with col3:
@@ -33,7 +33,7 @@ with col3:
         st.session_state.graph["nodes"].append({
             "id": f"n{len(st.session_state.graph['nodes']) + 1}",
             "type": "default",
-            "position": {"x": 300, "y": 100},
+            "position": {"x": 100 + 50 * len(st.session_state.graph["nodes"]), "y": 300},
             "data": {"label": "Result"}
         })
 with col4:
@@ -43,6 +43,10 @@ with col4:
         file_name="decision_tree.json",
         mime="application/json"
     )
+with col5:
+    if st.button("🗑 Clear Canvas"):
+        st.session_state.graph = {"nodes": [], "edges": []}
+        st.rerun()
 
 # ---- React Flow HTML ----
 st.subheader("Canvas")
