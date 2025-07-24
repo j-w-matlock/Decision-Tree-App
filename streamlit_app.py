@@ -108,10 +108,124 @@ st.subheader("Manage Edges")
 with st.form("add_edge_form", clear_on_submit=True):
     st.markdown("**Add Edge**")
     if nodes:
-        src = st.selectbox("From (source node)", [n["id"] for n in nodes], format_func=lambda i: f"{labels[i]} ({i})")
-        dst = st.selectbox("To (target node)", [n["id"] for n in nodes], format_func=lambda i: f"{labels[i]} ({i})")
+        src = st.selectbox(
+            "From (source node)",
+            [n["id"] for n in nodes],
+            format_func=lambda i: f"{labels[i]} ({i})"
+        )
+        dst = st.selectbox(
+            "To (target node)",
+            [n["id"] for n in nodes],
+            format_func=lambda i: f"{labels[i]} ({i})"
+        )
         label = st.text_input("Label (optional)")
         prob = st.text_input("Probability (optional, e.g., 0.3)")
         submitted = st.form_submit_button("➕ Add Edge")
         if submitted:
             if src == dst:
+                st.warning("Source and target must be different.")
+            else:
+                p_val = None
+                if prob.strip():
+                    try:
+                        p_val = float(prob)
+                    except:
+                        st.warning("Invalid probability format, ignoring.")
+                edges.append({
+                    "id": new_edge_id(),
+                    "source": src,
+                    "target": dst,
+                    "label": label if label else None,
+                    "data": {"prob": p_val} if p_val is not None else {}
+                })
+                st.rerun()
+    else:
+        st.info("Add nodes first to create edges.")
+
+if edges:
+    st.markdown("**Delete Edge**")
+    edge_descriptions = [
+        f"{e['id']}: {labels.get(e['source'], e['source'])} → {labels.get(e['target'], e['target'])}"
+        + (f" | label='{e.get('label')}'" if e.get('label') else "")
+        + (f" | p={e.get('data', {}).get('prob')}" if e.get('data', {}).get('prob') is not None else "")
+        for e in edges
+    ]
+    idx_to_delete = st.selectbox("Select Edge", list(range(len(edges))), format_func=lambda i: edge_descriptions[i])
+    if st.button("🗑 Delete Selected Edge"):
+        edges.pop(idx_to_delete)
+        st.rerun()
+else:
+    st.info("No edges to display.")
+
+st.divider()
+
+# ---------------------------
+# Canvas
+# ---------------------------
+st.subheader("Canvas")
+
+reactflow_html = f"""
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>React Flow</title>
+    <style>
+      html, body, #root {{
+        height: 100%;
+        margin: 0;
+        background: #f0f0f0;
+      }}
+      .react-flow__node {{
+        border: 1px solid #777;
+        padding: 5px;
+        border-radius: 3px;
+        background: white;
+      }}
+    </style>
+    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/reactflow/dist/umd/react-flow.production.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      const {{ ReactFlow, ReactFlowProvider, MiniMap, Controls, Background }} = window.ReactFlow;
+
+      const nodes = {json.dumps(nodes)};
+      const edges = {json.dumps(edges)};
+
+      ReactDOM.render(
+        React.createElement(ReactFlowProvider, null,
+          React.createElement("div", {{ style: {{ width: "100%", height: "600px" }} }},
+            React.createElement(ReactFlow, {{
+              nodes: nodes,
+              edges: edges,
+              fitView: true
+            }},
+              React.createElement(MiniMap, null),
+              React.createElement(Controls, null),
+              React.createElement(Background, null)
+            )
+          )
+        ),
+        document.getElementById("root")
+      );
+    </script>
+  </body>
+</html>
+"""
+components.html(reactflow_html, height=620, scrolling=False)
+
+# ---------------------------
+# Import JSON
+# ---------------------------
+st.subheader("Import JSON")
+uploaded = st.file_uploader("Upload decision_tree.json", type=["json"])
+if uploaded:
+    try:
+        st.session_state.graph = json.load(uploaded)
+        st.success("Graph imported!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"Failed to import: {e}")
