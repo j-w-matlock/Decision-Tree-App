@@ -6,7 +6,8 @@ from collections import Counter
 
 import pandas as pd
 import streamlit as st
-from graphviz import Digraph
+import networkx as nx
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Decision Tree Builder", layout="wide")
 
@@ -15,12 +16,11 @@ st.set_page_config(page_title="Decision Tree Builder", layout="wide")
 # -----------------------
 def _init_state():
     if "tree" not in st.session_state:
-        st.session_state.tree = {
-            "nodes": {},   # {node_id: {"id": str, "label": str, "type": "event"|"response"|"outcome"}}
-            "edges": []    # [{"from": id, "to": id, "p": Optional[float]}]
-        }
+        st.session_state.tree = {"nodes": {}, "edges": []}
     if "sim" not in st.session_state:
         st.session_state.sim = {"active": False, "current": None, "path": []}
+    if "highlight_edges" not in st.session_state:
+        st.session_state.highlight_edges = []
 
 def reset_tree():
     st.session_state.tree = {"nodes": {}, "edges": []}
@@ -28,21 +28,20 @@ def reset_tree():
 
 def reset_sim():
     st.session_state.sim = {"active": False, "current": None, "path": []}
+    st.session_state.highlight_edges = []
 
 _init_state()
 
-# -------------
+# ---------------------
 # Core helpers
-# -------------
+# ---------------------
 def new_node_id() -> str:
     return f"n_{uuid.uuid4().hex[:8]}"
 
 def add_node(label: str, node_type: str) -> str:
     node_id = new_node_id()
     st.session_state.tree["nodes"][node_id] = {
-        "id": node_id,
-        "label": label.strip() if label else "(unnamed)",
-        "type": node_type
+        "id": node_id, "label": label.strip() if label else "(unnamed)", "type": node_type
     }
     return node_id
 
@@ -57,16 +56,11 @@ def delete_node(node_id: str):
     st.session_state.tree["edges"] = [
         e for e in st.session_state.tree["edges"] if e["from"] != node_id and e["to"] != node_id
     ]
-    if (st.session_state.sim["current"] == node_id or
-            node_id in st.session_state.sim["path"]):
-        reset_sim()
+    reset_sim()
 
 def add_edge(src: str, dst: str, p: float | None = None):
     if src == dst:
         st.warning("Can't create self-loop edge.")
-        return
-    if src not in st.session_state.tree["nodes"] or dst not in st.session_state.tree["nodes"]:
-        st.warning("Invalid nodes for edge.")
         return
     if any(e["from"] == src and e["to"] == dst for e in st.session_state.tree["edges"]):
         st.info("Edge already exists.")
@@ -88,87 +82,77 @@ def node_label(node_id: str) -> str:
     return f"{n['label']} ({n['type']})"
 
 def start_sim(start_node: str):
-    st.session_state.sim["active"] = True
-    st.session_state.sim["current"] = start_node
-    st.session_state.sim["path"] = [start_node]
+    st.session_state.sim = {"active": True, "current": start_node, "path": [start_node]}
+    st.session_state.highlight_edges = []
 
 def step_sim(next_node: str):
+    current = st.session_state.sim["current"]
     st.session_state.sim["current"] = next_node
     st.session_state.sim["path"].append(next_node)
+    st.session_state.highlight_edges.append((current, next_node))
 
 def is_terminal(node_id: str) -> bool:
     return len(outgoing(node_id)) == 0
 
 def sanitize_prob(x) -> float | None:
     try:
-        if x is None or x == "":
-            return None
-        v = float(x)
-        if v < 0:
-            return None
-        return v
+        return None if x == "" else float(x)
     except:
         return None
 
-# ---------------
+# -----------------------
 # Visualization
-# ---------------
-def render_graph():
-    dot = Digraph()
+# -----------------------
+def render_graph(highlight_edges=None):
+    G = nx.DiGraph()
+    labels = {}
+
     for node_id, node in st.session_state.tree["nodes"].items():
-        color = {"event": "lightblue", "response": "lightgreen", "outcome": "orange"}.get(node["type"], "white")
-        safe_label = node['label'].replace('"', '\\"')
-        dot.node(node_id, f"{safe_label} ({node['type']})", style="filled", fillcolor=color)
+        G.add_node(node_id)
+        labels[node_id] = f"{node['label']} ({node['type']})"
 
     for edge in st.session_state.tree["edges"]:
-        if edge["from"] in st.session_state.tree["nodes"] and edge["to"] in st.session_state.tree["nodes"]:
-            label = ""
-            if edge.get("p") is not None:
-                label = f"p={edge['p']:.3f}"
-            dot.edge(edge["from"], edge["to"], label=label)
+        G.add_edge(edge["from"], edge["to"])
 
-    st.graphviz_chart(dot, use_container_width=True)
+    pos = nx.spring_layout(G, seed=42)
+    plt.figure(figsize=(8, 6))
+
+    # Node colors
+    node_colors = []
+    for n in G.nodes():
+        node_type = st.session_state.tree["nodes"][n]["type"]
+        node_colors.append({"event": "skyblue", "response": "lightgreen", "outcome": "orange"}[node_type])
+
+    nx.draw(G, pos, with_labels=True, labels=labels, node_color=node_colors,
+            node_size=2000, font_size=8, arrows=True)
+
+    # Highlighted edges
+    if highlight_edges:
+        nx.draw_networkx_edges(
+            G, pos, edgelist=highlight_edges, width=3, edge_color="red"
+        )
+
+    st.pyplot(plt.gcf())
+    plt.close()
 
 # -----------------------
-# Monte Carlo logic
+# Monte Carlo
 # -----------------------
 def choose_next_with_probs(current: str) -> str | None:
     outs = outgoing_edges(current)
     if not outs:
         return None
+    probs = [e.get("p") or 1 for e in outs]
+    return random.choices([e["to"] for e in outs], weights=probs, k=1)[0]
 
-    # Check if at least one edge has p set
-    probs = [e.get("p") for e in outs]
-    if all(p is None for p in probs):
-        # uniform
-        return random.choice([e["to"] for e in outs])
-
-    # Use provided (non-None) probs, treat None as 0, then normalize
-    cleaned = [0.0 if p is None else max(p, 0.0) for p in probs]
-    total = sum(cleaned)
-    if total <= 0.0:
-        # fallback to uniform if probs invalid
-        return random.choice([e["to"] for e in outs])
-
-    normalized = [p / total for p in cleaned]
-    r = random.random()
-    cum = 0.0
-    for e, p in zip(outs, normalized):
-        cum += p
-        if r <= cum:
-            return e["to"]
-    # numerical edge case
-    return outs[-1]["to"]
-
-def run_monte_carlo(start_node: str, n_runs: int, max_steps: int) -> Tuple[Counter, Counter]:
-    """Returns (terminal_outcomes_counter, full_path_counter)"""
+def run_monte_carlo(start_node: str, n_runs: int, max_steps: int) -> Tuple[Counter, str]:
     terminal_outcomes = Counter()
-    paths = Counter()
+    path_counts = Counter()
 
     for _ in range(n_runs):
         current = start_node
         path = [current]
-        for _step in range(max_steps):
+        for _ in range(max_steps):
             nxt = choose_next_with_probs(current)
             if nxt is None:
                 break
@@ -176,252 +160,115 @@ def run_monte_carlo(start_node: str, n_runs: int, max_steps: int) -> Tuple[Count
             path.append(current)
             if is_terminal(current):
                 break
-        # record
-        label = node_label(current)
-        terminal_outcomes[label] += 1
-        path_str = " → ".join(node_label(n) for n in path)
-        paths[path_str] += 1
+        terminal_outcomes[node_label(current)] += 1
+        path_counts[" → ".join(node_label(n) for n in path)] += 1
 
-    return terminal_outcomes, paths
+    most_common_path = path_counts.most_common(1)[0][0].split(" → ")
+    highlight_edges = []
+    for i in range(len(most_common_path) - 1):
+        from_node = [k for k, v in st.session_state.tree["nodes"].items() if node_label(k) == most_common_path[i]][0]
+        to_node = [k for k, v in st.session_state.tree["nodes"].items() if node_label(k) == most_common_path[i + 1]][0]
+        highlight_edges.append((from_node, to_node))
 
+    return terminal_outcomes, highlight_edges
 
-# ------------
-# UI Sections
-# ------------
-st.title("🌳 Decision Tree Builder (Streamlit) — with Optional Probabilities & Monte Carlo")
+# -----------------------
+# UI
+# -----------------------
+st.title("🌳 Decision Tree Builder with Path Highlighting")
 
-# Reset Tree Button
-if st.button("🔄 Reset Entire Tree"):
+# Reset Tree
+if st.button("🔄 Reset Tree"):
     reset_tree()
     st.success("Tree reset.")
 
-tabs = st.tabs(["Build", "Simulate", "Monte Carlo", "Import / Export", "Debug"])
+tabs = st.tabs(["Build", "Simulate", "Monte Carlo", "Import/Export"])
 
-# ---------------------
-# TAB 1: Build the tree
-# ---------------------
+# -----------------------
+# TAB 1: Build
+# -----------------------
 with tabs[0]:
     left, right = st.columns([1, 2])
-
     with left:
         st.header("Add Node")
         with st.form("add_node_form", clear_on_submit=True):
             node_label_in = st.text_input("Label")
             node_type_in = st.selectbox("Type", ["event", "response", "outcome"])
-            submitted = st.form_submit_button("➕ Add Node")
-            if submitted:
-                node_id = add_node(node_label_in, node_type_in)
-                st.success(f"Node added: {node_id}")
-
-        st.divider()
-        st.header("Edit Node")
+            if st.form_submit_button("➕ Add Node"):
+                add_node(node_label_in, node_type_in)
+                st.success("Node added.")
+        st.header("Add Edge")
         all_nodes = list(st.session_state.tree["nodes"].keys())
         if all_nodes:
-            selected_edit = st.selectbox("Select node", all_nodes, format_func=node_label, key="edit_node")
-            node = st.session_state.tree["nodes"][selected_edit]
-            new_label = st.text_input("New label", value=node["label"], key=f"edit_label_{selected_edit}")
-            new_type = st.selectbox(
-                "New type",
-                ["event", "response", "outcome"],
-                index=["event", "response", "outcome"].index(node["type"]),
-                key=f"edit_type_{selected_edit}"
-            )
-            if st.button("💾 Save changes", key=f"save_{selected_edit}"):
-                edit_node(selected_edit, new_label, new_type)
-                st.success("Node updated.")
-        else:
-            st.info("No nodes yet.")
-
-        st.divider()
-        st.header("Delete Node")
-        if all_nodes:
-            selected_delete = st.selectbox("Select node", all_nodes, format_func=node_label, key="delete_node")
-            confirm = st.checkbox("I understand this will remove attached edges too.", key="confirm_delete")
-            if st.button("🗑️ Delete Node", disabled=not confirm):
-                delete_node(selected_delete)
-                st.success("Node deleted.")
-        else:
-            st.info("No nodes to delete.")
-
-        st.divider()
-        st.header("Add Edge")
-        if all_nodes:
-            from_node = st.selectbox("From", all_nodes, format_func=node_label, key="edge_from")
-            to_node = st.selectbox("To", all_nodes, format_func=node_label, key="edge_to")
-            edge_p = st.text_input("Optional probability (0–1, blank = none)", key="edge_prob")
+            from_node = st.selectbox("From", all_nodes, format_func=node_label)
+            to_node = st.selectbox("To", all_nodes, format_func=node_label)
+            p = sanitize_prob(st.text_input("Probability (optional)"))
             if st.button("➕ Add Edge"):
-                p = sanitize_prob(edge_p)
                 add_edge(from_node, to_node, p)
         else:
-            st.info("Create nodes first.")
-
-        st.divider()
-        st.header("Edit Edge Probabilities")
-        edges = st.session_state.tree["edges"]
-        if edges:
-            for i, e in enumerate(edges):
-                with st.expander(f"Edge {i}: {node_label(e['from'])} → {node_label(e['to'])}"):
-                    cur = "" if e.get("p") is None else str(e["p"])
-                    newp = st.text_input("Probability (blank = none)", value=cur, key=f"edge_edit_{i}")
-                    if st.button("Save", key=f"edge_save_{i}"):
-                        st.session_state.tree["edges"][i]["p"] = sanitize_prob(newp)
-                        st.success("Saved.")
-        else:
-            st.info("No edges to edit.")
-
-        st.divider()
-        st.header("Delete Edge")
-        if edges:
-            labels = [
-                f"{i}: {node_label(e['from'])} → {node_label(e['to'])}" + (f" (p={e['p']})" if e.get("p") is not None else "")
-                for i, e in enumerate(edges)
-            ]
-            idx_to_del = st.selectbox("Select edge", list(range(len(edges))), format_func=lambda i: labels[i])
-            if st.button("🗑️ Delete Edge"):
-                delete_edge(idx_to_del)
-                st.success("Edge deleted.")
-        else:
-            st.info("No edges to delete.")
-
+            st.info("Add nodes first.")
     with right:
-        st.subheader("Current Tree Visualization")
-        # Quick probability sanity: warn if any node has outgoing probs that don't sum ~1
-        for nid in st.session_state.tree["nodes"]:
-            outs = outgoing_edges(nid)
-            ps = [e.get("p") for e in outs if e.get("p") is not None]
-            if ps:
-                s = sum(ps)
-                if abs(s - 1.0) > 1e-6:
-                    st.warning(f"Outgoing probabilities from {node_label(nid)} sum to {s:.4f} (will be renormalized in Monte Carlo).")
+        st.subheader("Tree Visualization")
         render_graph()
 
 # -----------------------
-# TAB 2: Simulation Mode
+# TAB 2: Simulation
 # -----------------------
 with tabs[1]:
-    st.header("Simulation (manual path selection)")
+    st.header("Simulation Mode")
     all_nodes = list(st.session_state.tree["nodes"].keys())
-    if not all_nodes:
-        st.info("Create some nodes first.")
+    if all_nodes:
+        if not st.session_state.sim["active"]:
+            start_node = st.selectbox("Start Node", all_nodes, format_func=node_label)
+            if st.button("▶️ Start Simulation"):
+                start_sim(start_node)
+        else:
+            current = st.session_state.sim["current"]
+            st.success(f"Current Node: {node_label(current)}")
+            for nid in outgoing(current):
+                if st.button(f"➡️ {node_label(nid)}", key=f"step_{nid}"):
+                    step_sim(nid)
+            if not outgoing(current):
+                st.info("Reached a terminal node.")
+            st.markdown("**Path so far:**")
+            st.write(" → ".join(node_label(nid) for nid in st.session_state.sim["path"]))
+            render_graph(st.session_state.highlight_edges)
     else:
-        # defensive
-        if (st.session_state.sim["current"] not in st.session_state.tree["nodes"] and
-                st.session_state.sim["current"] is not None):
-            reset_sim()
-
-        sim_col1, sim_col2 = st.columns([1, 2])
-        with sim_col1:
-            if not st.session_state.sim["active"]:
-                start_node = st.selectbox("Pick a start node", all_nodes, format_func=node_label, key="sim_start_node")
-                if st.button("▶️ Start simulation"):
-                    start_sim(start_node)
-            else:
-                st.success(f"Simulation running: {node_label(st.session_state.sim['current'])}")
-                if st.button("⏹️ Reset simulation"):
-                    reset_sim()
-
-        with sim_col2:
-            if st.session_state.sim["active"]:
-                current = st.session_state.sim["current"]
-                st.subheader(f"Current: {node_label(current)}")
-                outs = outgoing(current)
-                if outs:
-                    st.markdown("**Choose next step:**")
-                    for nid in outs:
-                        if st.button(f"➡️ {node_label(nid)}", key=f"step_{nid}"):
-                            step_sim(nid)
-                else:
-                    st.info("Reached a terminal node.")
-                    if st.button("🔁 Restart"):
-                        reset_sim()
-                st.markdown("### Path so far")
-                st.write(" → ".join(node_label(nid) for nid in st.session_state.sim["path"]))
-
-    st.divider()
-    st.subheader("Tree (for reference)")
-    render_graph()
+        st.info("Add nodes to simulate.")
 
 # -----------------------
 # TAB 3: Monte Carlo
 # -----------------------
 with tabs[2]:
-    st.header("Monte Carlo Simulation (uses probabilities if provided, else uniform)")
+    st.header("Monte Carlo Simulation")
     all_nodes = list(st.session_state.tree["nodes"].keys())
-    if not all_nodes:
-        st.info("Create some nodes first.")
+    if all_nodes:
+        start_node = st.selectbox("Start Node", all_nodes, format_func=node_label)
+        n_runs = st.number_input("Number of runs", 1, 100000, 1000, 100)
+        max_steps = st.number_input("Max steps per run", 1, 1000, 50)
+        if st.button("▶️ Run Monte Carlo"):
+            term, highlight = run_monte_carlo(start_node, n_runs, max_steps)
+            st.subheader("Terminal Node Frequencies")
+            df = pd.DataFrame([{"Node": k, "Count": v, "Pct": v / n_runs} for k, v in term.items()])
+            st.dataframe(df, use_container_width=True)
+            st.subheader("Most Probable Path Highlighted")
+            render_graph(highlight)
     else:
-        mc_col1, mc_col2 = st.columns([1, 1])
-        with mc_col1:
-            start_node = st.selectbox("Start node", all_nodes, format_func=node_label, key="mc_start")
-            n_runs = st.number_input("Number of runs", min_value=1, value=1000, step=100)
-            max_steps = st.number_input("Max steps per run", min_value=1, value=50, step=1)
-            if st.button("▶️ Run Monte Carlo"):
-                term, paths = run_monte_carlo(start_node, int(n_runs), int(max_steps))
+        st.info("Add nodes to run Monte Carlo.")
 
-                st.subheader("Terminal node frequencies")
-                term_df = pd.DataFrame(
-                    [{"terminal": k, "count": v, "pct": v / n_runs} for k, v in term.items()]
-                ).sort_values("count", ascending=False)
-                st.dataframe(term_df, use_container_width=True)
-
-                st.subheader("Most common full paths")
-                top_paths = paths.most_common(20)
-                path_df = pd.DataFrame(
-                    [{"path": p, "count": c, "pct": c / n_runs} for p, c in top_paths]
-                )
-                st.dataframe(path_df, use_container_width=True)
-
-        with mc_col2:
-            st.subheader("Tree (for reference)")
-            # probs sanity check
-            for nid in st.session_state.tree["nodes"]:
-                outs = outgoing_edges(nid)
-                ps = [e.get("p") for e in outs if e.get("p") is not None]
-                if ps:
-                    s = sum(ps)
-                    if abs(s - 1.0) > 1e-6:
-                        st.info(f"Outgoing probabilities from {node_label(nid)} sum to {s:.4f} (renormalized).")
-            render_graph()
-
-# -------------------------
-# TAB 4: Import / Export
-# -------------------------
+# -----------------------
+# TAB 4: Import/Export
+# -----------------------
 with tabs[3]:
-    st.header("💾 Export / Import")
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        st.subheader("Export")
-        exported = json.dumps(st.session_state.tree, indent=2)
-        st.download_button("Download tree.json", data=exported, file_name="decision_tree.json", mime="application/json")
-
-    with col_b:
-        st.subheader("Import")
-        uploaded = st.file_uploader("Upload decision_tree.json", type=["json"])
-        if uploaded is not None:
-            try:
-                raw = json.load(uploaded)
-                if "nodes" in raw and "edges" in raw:
-                    valid_ids = set(raw["nodes"].keys())
-                    cleaned_edges = []
-                    for e in raw["edges"]:
-                        if e.get("from") in valid_ids and e.get("to") in valid_ids:
-                            ee = {"from": e["from"], "to": e["to"], "p": sanitize_prob(e.get("p"))}
-                            cleaned_edges.append(ee)
-                    raw["edges"] = cleaned_edges
-                    st.session_state.tree = raw
-                    reset_sim()
-                    st.success("Tree imported successfully!")
-                else:
-                    st.error("Invalid JSON format.")
-            except Exception as e:
-                st.error(f"Failed to import: {e}")
-
-    st.divider()
-    st.subheader("Preview JSON")
-    st.code(exported, language="json")
-
-
-with tabs[4]:
-    st.header("Debug Info")
-    st.json({"tree": st.session_state.tree, "sim": st.session_state.sim})
+    st.header("Import/Export")
+    exported = json.dumps(st.session_state.tree, indent=2)
+    st.download_button("Download Tree JSON", data=exported, file_name="decision_tree.json")
+    uploaded = st.file_uploader("Upload decision_tree.json", type=["json"])
+    if uploaded:
+        raw = json.load(uploaded)
+        if "nodes" in raw and "edges" in raw:
+            st.session_state.tree = raw
+            reset_sim()
+            st.success("Tree imported.")
+        else:
+            st.error("Invalid JSON format.")
