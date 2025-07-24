@@ -2,9 +2,10 @@ import json
 import uuid
 import streamlit as st
 import streamlit.components.v1 as components
+from pyvis.network import Network
 
-st.set_page_config(page_title="Decision Tree – React Flow", layout="wide")
-st.title("🌳 Decision Tree – Streamlit + React Flow (Embedded)")
+st.set_page_config(page_title="Decision Tree – PyVis", layout="wide")
+st.title("🌳 Decision Tree – Interactive (Right-Click + Edges)")
 
 # ---------------------------
 # Session state
@@ -12,220 +13,206 @@ st.title("🌳 Decision Tree – Streamlit + React Flow (Embedded)")
 if "graph" not in st.session_state:
     st.session_state.graph = {"nodes": [], "edges": []}
 
+if "selected_node" not in st.session_state:
+    st.session_state.selected_node = None  # For edge creation
+
 def new_node_id() -> str:
     return f"n_{uuid.uuid4().hex[:6]}"
 
 def new_edge_id() -> str:
     return f"e_{uuid.uuid4().hex[:6]}"
 
-def node_kind_style(kind: str) -> dict:
-    colors = {
-        "event":    ("#1d4ed8", "#e0ecff"),
-        "decision": ("#16a34a", "#e6f7eb"),
-        "result":   ("#f97316", "#fff1e6"),
+# ---------------------------
+# PyVis builder
+# ---------------------------
+def build_pyvis_graph(graph):
+    net = Network(height="600px", width="100%", directed=True, notebook=False)
+    net.set_options("""
+    var options = {
+      "nodes": {
+        "borderWidth": 2,
+        "size": 25,
+        "font": {"size": 16, "face": "arial"},
+        "shape": "box",
+        "margin": 10
+      },
+      "edges": {
+        "smooth": false,
+        "arrows": {"to": {"enabled": true}},
+        "font": {"size": 12, "align": "horizontal"}
+      },
+      "physics": {
+        "enabled": true,
+        "stabilization": {"iterations": 300}
+      },
+      "interaction": {
+        "navigationButtons": true,
+        "keyboard": true,
+        "multiselect": true,
+        "selectConnectedEdges": false
+      }
     }
-    border, bg = colors.get(kind, ("#777", "#fff"))
-    return {"border": f"2px solid {border}", "background": bg, "borderRadius": 6, "padding": 6, "minWidth": 120}
+    """)
+    # Add nodes
+    for n in graph["nodes"]:
+        color = {"event": "#e0ecff", "decision": "#e6f7eb", "result": "#fff1e6"}.get(n.get("kind", "event"), "#fff")
+        border = {"event": "#1d4ed8", "decision": "#16a34a", "result": "#f97316"}.get(n.get("kind", "event"), "#777")
+        net.add_node(n["id"], n["data"]["label"], color=color, borderWidth=2, borderWidthSelected=3)
+    # Add edges
+    for e in graph["edges"]:
+        label = e.get("label") or ""
+        prob = e.get("data", {}).get("prob")
+        if prob is not None:
+            if label:
+                label = f"{label} (p={prob})"
+            else:
+                label = f"p={prob}"
+        net.add_edge(e["source"], e["target"], label=label)
+    return net
 
 # ---------------------------
-# Toolbar
+# Interactive Canvas
 # ---------------------------
-st.subheader("Toolbar")
+st.subheader("Canvas (Right-click to Add, Click→Right-click to Connect)")
 
-c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1])
+net = build_pyvis_graph(st.session_state.graph)
+html_file = "graph.html"
+net.save_graph(html_file)
 
-with c1:
-    if st.button("＋ Event"):
-        st.session_state.graph["nodes"].append({
-            "id": new_node_id(),
-            "type": "default",
-            "position": {"x": 100 + 50 * len(st.session_state.graph["nodes"]), "y": 120},
-            "data": {"label": "Event"},
-            "style": node_kind_style("event"),
-            "kind": "event"
-        })
-        st.rerun()
+# Custom JS to add context menu and handle edge creation
+custom_js = """
+<script>
+let selectedNode = null;
 
-with c2:
-    if st.button("＋ Decision"):
-        st.session_state.graph["nodes"].append({
-            "id": new_node_id(),
-            "type": "default",
-            "position": {"x": 100 + 50 * len(st.session_state.graph["nodes"]), "y": 220},
-            "data": {"label": "Decision"},
-            "style": node_kind_style("decision"),
-            "kind": "decision"
-        })
-        st.rerun()
+// Add custom right-click behavior
+document.addEventListener("contextmenu", function(event) {
+    event.preventDefault();
+    var canvas = document.querySelector("canvas");
+    if (!canvas || !canvas.getBoundingClientRect().contains(event.clientX, event.clientY)) return;
 
-with c3:
-    if st.button("＋ Result"):
-        st.session_state.graph["nodes"].append({
-            "id": new_node_id(),
-            "type": "default",
-            "position": {"x": 100 + 50 * len(st.session_state.graph["nodes"]), "y": 320},
-            "data": {"label": "Result"},
-            "style": node_kind_style("result"),
-            "kind": "result"
-        })
-        st.rerun()
+    var menu = document.createElement("div");
+    menu.style.position = "fixed";
+    menu.style.left = event.clientX + "px";
+    menu.style.top = event.clientY + "px";
+    menu.style.background = "#f8fafc";
+    menu.style.border = "1px solid #ccc";
+    menu.style.padding = "8px";
+    menu.style.zIndex = 1000;
 
-with c4:
+    const addEvent = document.createElement("div");
+    addEvent.innerText = "Add Event Node";
+    addEvent.onclick = function() {
+        var label = prompt("Enter Event label:", "Event");
+        if (label) {
+            window.parent.postMessage({type: "add_node", kind: "event", label: label}, "*");
+        }
+        document.body.removeChild(menu);
+    };
+    menu.appendChild(addEvent);
+
+    const addDecision = document.createElement("div");
+    addDecision.innerText = "Add Decision Node";
+    addDecision.onclick = function() {
+        var label = prompt("Enter Decision label:", "Decision");
+        if (label) {
+            window.parent.postMessage({type: "add_node", kind: "decision", label: label}, "*");
+        }
+        document.body.removeChild(menu);
+    };
+    menu.appendChild(addDecision);
+
+    const addResult = document.createElement("div");
+    addResult.innerText = "Add Result Node";
+    addResult.onclick = function() {
+        var label = prompt("Enter Result label:", "Result");
+        if (label) {
+            window.parent.postMessage({type: "add_node", kind: "result", label: label}, "*");
+        }
+        document.body.removeChild(menu);
+    };
+    menu.appendChild(addResult);
+
+    if (selectedNode) {
+        const connectNode = document.createElement("div");
+        connectNode.innerText = "Connect from " + selectedNode;
+        connectNode.onclick = function() {
+            var target = prompt("Enter target node ID:");
+            if (target) {
+                var label = prompt("Edge label (optional):", "");
+                var prob = prompt("Probability (optional):", "");
+                window.parent.postMessage({type: "add_edge", source: selectedNode, target: target, label: label, prob: prob}, "*");
+            }
+            document.body.removeChild(menu);
+        };
+        menu.appendChild(connectNode);
+    }
+
+    document.body.appendChild(menu);
+    document.addEventListener("click", function() {
+        if (menu) document.body.removeChild(menu);
+    }, { once: true });
+});
+
+// Listen for node clicks (to prepare edge creation)
+window.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "select_node") {
+        selectedNode = event.data.nodeId;
+    }
+});
+</script>
+"""
+
+with open(html_file, "r", encoding="utf-8") as f:
+    html_data = f.read().replace("</body>", custom_js + "</body>")
+
+components.html(html_data, height=650, scrolling=True)
+
+# ---------------------------
+# Communication with Streamlit
+# ---------------------------
+msg = st.experimental_get_query_params().get("msg", [""])[0]
+
+if msg.startswith("add_node:"):
+    parts = msg.split(":")
+    kind = parts[1]
+    label = ":".join(parts[2:])
+    st.session_state.graph["nodes"].append({
+        "id": new_node_id(),
+        "data": {"label": label},
+        "kind": kind
+    })
+    st.experimental_set_query_params()
+    st.rerun()
+
+if msg.startswith("add_edge:"):
+    _, source, target, label, prob = msg.split(":", 4)
+    p_val = float(prob) if prob else None
+    st.session_state.graph["edges"].append({
+        "id": new_edge_id(),
+        "source": source,
+        "target": target,
+        "label": label if label else None,
+        "data": {"prob": p_val} if p_val is not None else {}
+    })
+    st.experimental_set_query_params()
+    st.rerun()
+
+# ---------------------------
+# Import/Export JSON
+# ---------------------------
+st.subheader("Import/Export")
+
+col1, col2 = st.columns(2)
+with col1:
     st.download_button(
         "💾 Export JSON",
         data=json.dumps(st.session_state.graph, indent=2),
         file_name="decision_tree.json",
         mime="application/json"
     )
-
-with c5:
-    if st.button("🗑 Clear Canvas"):
-        st.session_state.graph = {"nodes": [], "edges": []}
-        st.rerun()
-
-st.divider()
-
-# ---------------------------
-# Fallback test node
-# ---------------------------
-if not st.session_state.graph["nodes"]:
-    st.session_state.graph["nodes"] = [{
-        "id": "test",
-        "type": "default",
-        "position": {"x": 250, "y": 150},
-        "data": {"label": "Hello React Flow"}
-    }]
-
-nodes = st.session_state.graph["nodes"]
-edges = st.session_state.graph["edges"]
-labels = {n["id"]: n["data"]["label"] for n in nodes}
-
-# ---------------------------
-# Edge Management
-# ---------------------------
-st.subheader("Manage Edges")
-
-with st.form("add_edge_form", clear_on_submit=True):
-    st.markdown("**Add Edge**")
-    if nodes:
-        src = st.selectbox(
-            "From (source node)",
-            [n["id"] for n in nodes],
-            format_func=lambda i: f"{labels[i]} ({i})"
-        )
-        dst = st.selectbox(
-            "To (target node)",
-            [n["id"] for n in nodes],
-            format_func=lambda i: f"{labels[i]} ({i})"
-        )
-        label = st.text_input("Label (optional)")
-        prob = st.text_input("Probability (optional, e.g., 0.3)")
-        submitted = st.form_submit_button("➕ Add Edge")
-        if submitted:
-            if src == dst:
-                st.warning("Source and target must be different.")
-            else:
-                p_val = None
-                if prob.strip():
-                    try:
-                        p_val = float(prob)
-                    except:
-                        st.warning("Invalid probability format, ignoring.")
-                edges.append({
-                    "id": new_edge_id(),
-                    "source": src,
-                    "target": dst,
-                    "label": label if label else None,
-                    "data": {"prob": p_val} if p_val is not None else {}
-                })
-                st.rerun()
-    else:
-        st.info("Add nodes first to create edges.")
-
-if edges:
-    st.markdown("**Delete Edge**")
-    edge_descriptions = [
-        f"{e['id']}: {labels.get(e['source'], e['source'])} → {labels.get(e['target'], e['target'])}"
-        + (f" | label='{e.get('label')}'" if e.get('label') else "")
-        + (f" | p={e.get('data', {}).get('prob')}" if e.get('data', {}).get('prob') is not None else "")
-        for e in edges
-    ]
-    idx_to_delete = st.selectbox("Select Edge", list(range(len(edges))), format_func=lambda i: edge_descriptions[i])
-    if st.button("🗑 Delete Selected Edge"):
-        edges.pop(idx_to_delete)
-        st.rerun()
-else:
-    st.info("No edges to display.")
-
-st.divider()
-
-# ---------------------------
-# Canvas
-# ---------------------------
-st.subheader("Canvas")
-
-elements = nodes + edges  # Combine nodes and edges for React Flow's UMD build
-
-reactflow_html = f"""
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>React Flow</title>
-    <style>
-      html, body, #root {{
-        height: 100%;
-        margin: 0;
-        background: #f0f0f0;
-      }}
-      .react-flow__node {{
-        border: 1px solid #777;
-        padding: 5px;
-        border-radius: 3px;
-        background: white;
-      }}
-    </style>
-    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/reactflow/dist/umd/react-flow.production.min.js"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script>
-      const {{ ReactFlow, ReactFlowProvider, MiniMap, Controls, Background }} = window.ReactFlow;
-
-      const elements = {json.dumps(elements)};
-
-      ReactDOM.render(
-        React.createElement(ReactFlowProvider, null,
-          React.createElement("div", {{ style: {{ width: "100%", height: "600px" }} }},
-            React.createElement(ReactFlow, {{
-              elements: elements,
-              fitView: true
-            }},
-              React.createElement(MiniMap, null),
-              React.createElement(Controls, null),
-              React.createElement(Background, null)
-            )
-          )
-        ),
-        document.getElementById("root")
-      );
-    </script>
-  </body>
-</html>
-"""
-components.html(reactflow_html, height=620, scrolling=False)
-
-# ---------------------------
-# Import JSON
-# ---------------------------
-st.subheader("Import JSON")
-uploaded = st.file_uploader("Upload decision_tree.json", type=["json"])
-if uploaded:
-    try:
+with col2:
+    uploaded = st.file_uploader("Upload decision_tree.json", type=["json"])
+    if uploaded:
         st.session_state.graph = json.load(uploaded)
         st.success("Graph imported!")
         st.rerun()
-    except Exception as e:
-        st.error(f"Failed to import: {e}")
