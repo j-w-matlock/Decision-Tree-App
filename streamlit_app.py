@@ -79,7 +79,7 @@ net = build_pyvis_graph(st.session_state.graph)
 html_file = "graph.html"
 net.save_graph(html_file)
 
-# Custom JS to add context menu and handle edge creation
+# Custom JS for right-click menu and edge creation
 custom_js = """
 <script>
 let selectedNode = null;
@@ -170,7 +170,7 @@ components.html(html_data, height=650, scrolling=True)
 # ---------------------------
 # Communication with Streamlit
 # ---------------------------
-msg = st.experimental_get_query_params().get("msg", [""])[0]
+msg = st.query_params.get("msg", "")
 
 if msg.startswith("add_node:"):
     parts = msg.split(":")
@@ -181,7 +181,7 @@ if msg.startswith("add_node:"):
         "data": {"label": label},
         "kind": kind
     })
-    st.experimental_set_query_params()
+    st.query_params.clear()
     st.rerun()
 
 if msg.startswith("add_edge:"):
@@ -194,7 +194,7 @@ if msg.startswith("add_edge:"):
         "label": label if label else None,
         "data": {"prob": p_val} if p_val is not None else {}
     })
-    st.experimental_set_query_params()
+    st.query_params.clear()
     st.rerun()
 
 # ---------------------------
