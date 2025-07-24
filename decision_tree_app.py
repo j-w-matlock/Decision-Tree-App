@@ -421,9 +421,7 @@ with tabs[3]:
     st.subheader("Preview JSON")
     st.code(exported, language="json")
 
-# --------------
-# TAB 5: Debug
-# --------------
+
 with tabs[4]:
     st.header("Debug Info")
     st.json({"tree": st.session_state.tree, "sim": st.session_state.sim})
