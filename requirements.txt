@@ -1,7 +1,11 @@
+# Core
 streamlit>=1.33.0
 pandas>=2.0.0
 networkx>=3.0
 matplotlib>=3.7.0
+
+# Excel export support
 openpyxl>=3.1.2
 
-
+# Optional for JSON handling and modern typing (already in Python 3.11+)
+typing-extensions>=4.5.0
