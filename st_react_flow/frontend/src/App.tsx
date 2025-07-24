@@ -7,9 +7,7 @@ import ReactFlow, {
   MarkerType,
   Connection,
   Node,
-  Edge,
-  useNodesState,
-  useEdgesState
+  Edge
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { nanoid } from "nanoid";
@@ -73,3 +71,22 @@ class App extends StreamlitComponentBase<any> {
             💾 Export JSON
           </a>
         </div>
+
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={(changes) => this.setState({ nodes: changes })}
+          onEdgesChange={(changes) => this.setState({ edges: changes })}
+          onConnect={this.onConnect}
+          fitView
+        >
+          <MiniMap nodeStrokeWidth={3} />
+          <Controls />
+          <Background variant="dots" gap={12} size={1} />
+        </ReactFlow>
+      </div>
+    );
+  }
+}
+
+export default withStreamlitConnection(App);
