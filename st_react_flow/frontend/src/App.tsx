@@ -4,12 +4,12 @@ import ReactFlow, {
   Controls,
   MiniMap,
   addEdge,
-  useNodesState,
-  useEdgesState,
   MarkerType,
   Connection,
   Node,
-  Edge
+  Edge,
+  useNodesState,
+  useEdgesState
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { nanoid } from "nanoid";
@@ -48,14 +48,6 @@ class App extends StreamlitComponentBase<any> {
     this.setState((s: any) => ({ nodes: [...s.nodes, node] }));
   };
 
-  onNodesChange = (changes: any) => {
-    this.setState((s: any) => ({ nodes: changes(s.nodes) })); // reactflow v11 helper
-  };
-
-  onEdgesChange = (changes: any) => {
-    this.setState((s: any) => ({ edges: changes(s.edges) }));
-  };
-
   onConnect = (conn: Connection) => {
     const e: Edge<EdgeData> = {
       ...conn,
@@ -81,22 +73,3 @@ class App extends StreamlitComponentBase<any> {
             💾 Export JSON
           </a>
         </div>
-
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={(c) => this.setState({ nodes: c(nodes) })}   {/* simple wrapper */}
-          onEdgesChange={(c) => this.setState({ edges: c(edges) })}
-          onConnect={this.onConnect}
-          fitView
-        >
-          <MiniMap nodeStrokeWidth={3} />
-          <Controls />
-          <Background variant="dots" gap={12} size={1} />
-        </ReactFlow>
-      </div>
-    );
-  }
-}
-
-export default withStreamlitConnection(App);
