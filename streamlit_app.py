@@ -32,7 +32,7 @@ def node_kind_style(kind: str) -> dict:
 # ---------------------------
 st.subheader("Toolbar")
 
-c1, c2, c3, c4, c5 = st.columns([1,1,1,1,1])
+c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1])
 
 with c1:
     if st.button("＋ Event"):
@@ -44,6 +44,7 @@ with c1:
             "style": node_kind_style("event"),
             "kind": "event"
         })
+        st.rerun()
 
 with c2:
     if st.button("＋ Decision"):
@@ -55,6 +56,7 @@ with c2:
             "style": node_kind_style("decision"),
             "kind": "decision"
         })
+        st.rerun()
 
 with c3:
     if st.button("＋ Result"):
@@ -66,6 +68,7 @@ with c3:
             "style": node_kind_style("result"),
             "kind": "result"
         })
+        st.rerun()
 
 with c4:
     st.download_button(
@@ -83,69 +86,30 @@ with c5:
 st.divider()
 
 # ---------------------------
-# UI: Edges (Create/Delete)
+# Fallback test node
 # ---------------------------
-st.subheader("Edges")
+if not st.session_state.graph["nodes"]:
+    st.session_state.graph["nodes"] = [{
+        "id": "test",
+        "type": "default",
+        "position": {"x": 250, "y": 150},
+        "data": {"label": "Hello React Flow"}
+    }]
 
-nodes = st.session_state.graph["nodes"]
-edges = st.session_state.graph["edges"]
-node_ids = [n["id"] for n in nodes]
-labels = {n["id"]: n["data"]["label"] for n in nodes}
-
-with st.form("add_edge_form", clear_on_submit=True):
-    st.markdown("**Add Edge**")
-    if node_ids:
-        src = st.selectbox("From (source)", node_ids, format_func=lambda i: f"{labels[i]} ({i})")
-        dst = st.selectbox("To (target)", node_ids, format_func=lambda i: f"{labels[i]} ({i})")
-        label = st.text_input("Label (optional)")
-        prob = st.text_input("Probability (optional, e.g. 0.3)")
-        submitted = st.form_submit_button("➕ Add edge")
-        if submitted:
-            if src == dst:
-                st.warning("Source and target must be different.")
-            else:
-                try:
-                    p_val = None if prob.strip() == "" else float(prob)
-                except Exception:
-                    p_val = None
-                edges.append({
-                    "id": new_edge_id(),
-                    "source": src,
-                    "target": dst,
-                    "label": label if label else None,
-                    "data": {"prob": p_val} if p_val is not None else {}
-                })
-                st.success("Edge added.")
-                st.rerun()
-    else:
-        st.info("Add some nodes first to create edges.")
-
-if edges:
-    st.markdown("**Existing edges**")
-    edge_descriptions = [
-        f"{e['id']}: {labels.get(e['source'], e['source'])} → {labels.get(e['target'], e['target'])}"
-        + (f" | label='{e.get('label')}'" if e.get('label') else "")
-        + (f" | p={e.get('data', {}).get('prob')}" if e.get('data', {}).get('prob') is not None else "")
-        for e in edges
-    ]
-    idx_to_delete = st.selectbox("Delete edge", list(range(len(edges))), format_func=lambda i: edge_descriptions[i])
-    if st.button("🗑 Delete selected edge"):
-        edges.pop(idx_to_delete)
-        st.success("Edge deleted.")
-        st.rerun()
-else:
-    st.info("No edges yet.")
-
-st.divider()
+# ---------------------------
+# Debug print
+# ---------------------------
+st.subheader("Current Graph JSON")
+st.code(json.dumps(st.session_state.graph, indent=2))
 
 # ---------------------------
 # Canvas
 # ---------------------------
 st.subheader("Canvas")
 
-# ReactFlow UMD needs nodes/edges with certain keys.
-# We'll pass our nodes/edges directly; ReactFlow will show labels from node.data.label
-# and edge.label, probabilities won't be rendered, but are carried in data.
+nodes = st.session_state.graph["nodes"]
+edges = st.session_state.graph["edges"]
+
 reactflow_html = f"""
 <!DOCTYPE html>
 <html>
