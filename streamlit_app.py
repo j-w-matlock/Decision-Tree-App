@@ -6,14 +6,11 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Decision Tree – vis-network", layout="wide")
-st.title("🌳 Decision Tree – ComfyUI-style (Right‑Click Interactive)")
+st.title("🌳 Decision Tree – ComfyUI-style (Double-Click Menu)")
 
 # ---------------------------
 # Helpers & state
 # ---------------------------
-def new_node_id() -> str:
-    return f"n_{uuid.uuid4().hex[:6]}"
-
 if "graph" not in st.session_state:
     st.session_state.graph = {"nodes": [], "edges": []}
 
@@ -26,7 +23,6 @@ if "graph" in st.query_params:
     except Exception as e:
         st.error(f"Failed to parse incoming graph: {e}")
     finally:
-        # clear to avoid re-importing on any refresh
         st.query_params = {}
 
 graph = st.session_state.graph
@@ -65,7 +61,6 @@ with st.expander("Current graph JSON (debug)"):
 # ---------------------------
 # Prepare data for the front-end
 # ---------------------------
-# vis-network needs: nodes: [{id, label, ...}], edges: [{id, from, to, label, ...}]
 nodes_js = json.dumps([
     {
         "id": n["id"],
@@ -103,7 +98,6 @@ edges_js = json.dumps([
     for e in graph["edges"]
 ])
 
-# Keep metadata so we can rebuild the server-side JSON accurately
 node_meta = {
     n["id"]: {"kind": n.get("kind", "event"), "label": n["data"]["label"]}
     for n in graph["nodes"]
@@ -118,7 +112,7 @@ edge_meta = {
 meta_js = json.dumps({"nodes": node_meta, "edges": edge_meta})
 
 # ---------------------------
-# Robust vis-network HTML + JS (right-click working)
+# Robust vis-network HTML + JS (Double-Click Menu)
 # ---------------------------
 html = f"""
 <!DOCTYPE html>
@@ -206,19 +200,12 @@ html = f"""
   </div>
 
   <script>
-    // ---------- initial data from Streamlit ----------
-    const nodeMeta = {meta_js};       // {{ nodes: {{id: {{kind, label}}}}, edges: {{id: {{label, prob}}}} }}
-    const nodeMetaNodes = nodeMeta.nodes || (nodeMeta.nodes = {{}});
-    const nodeMetaEdges = nodeMeta.edges || (nodeMeta.edges = {{}});
-    const initialNodes = {nodes_js};
-    const initialEdges = {edges_js};
+    const nodeMeta = {meta_js};
+    const nodes = new vis.DataSet({nodes_js});
+    const edges = new vis.DataSet({edges_js});
 
-    // ---------- vis-network setup ----------
     const container = document.getElementById('network');
-    const nodes = new vis.DataSet(initialNodes);
-    const edges = new vis.DataSet(initialEdges);
-
-    const data = {{ nodes, edges }};
+    const data = {{ nodes: nodes, edges: edges }};
     const options = {{
       interaction: {{
         multiselect: true,
@@ -230,26 +217,15 @@ html = f"""
         stabilization: {{ iterations: 300 }}
       }},
       edges: {{
-        arrows: {{
-          to: {{ enabled: true }}
-        }}
+        arrows: {{ to: {{ enabled: true }} }}
       }},
       nodes: {{
         shape: 'box',
         margin: 10,
-        borderWidth: 2,
-        chosen: {{
-          node: (values, id, selected) => {{
-            values.borderWidth = selected ? 4 : 2;
-          }}
-        }}
+        borderWidth: 2
       }}
     }};
-
     const network = new vis.Network(container, data, options);
-
-    // Disable default browser context menu on container
-    container.addEventListener("contextmenu", e => e.preventDefault());
 
     let selectedNode = null;
     const selectedLabelDiv = document.getElementById('selected-label');
@@ -264,188 +240,116 @@ html = f"""
       }}
     }}
 
-    // Left click selects a node
-    network.on("click", params => {{
-      if (params.nodes && params.nodes.length > 0) {{
-        selectedNode = params.nodes[0];
-      }} else {{
-        selectedNode = null;
-      }}
-      updateSelectedLabel();
-    }});
-
-    // Our robust right-click handler on the network container
-    network.body.container.addEventListener('contextmenu', function(e) {{
-      e.preventDefault();
-      const pointer = network.getPointer(e);
-      // network.getNodeAt expects DOM coords: use pointer.DOM.x/y if available
-      const domPoint = (pointer && pointer.DOM) ? pointer.DOM : {{ x: e.offsetX, y: e.offsetY }};
-      const nodeAt = network.getNodeAt({{ x: domPoint.x, y: domPoint.y }});
-      showContextMenu(e.clientX, e.clientY, nodeAt);
-    }});
-
+    // Context Menu Helpers
     function hideContextMenu() {{
       const menu = document.querySelector('.context-menu');
       if (menu) menu.remove();
     }}
 
-    function showContextMenu(x, y, nodeIdOrNull) {{
+    function showContextMenu(x, y, entries) {{
       hideContextMenu();
-
-      const entries = [];
-      if (!nodeIdOrNull) {{
-        // right-click on empty space
-        entries.push({{ label: 'Add Event Node', action: () => addNode('event') }});
-        entries.push({{ label: 'Add Decision Node', action: () => addNode('decision') }});
-        entries.push({{ label: 'Add Result Node', action: () => addNode('result') }});
-      }} else {{
-        // right-click on a node
-        entries.push({{
-          label: 'Select this node',
-          action: () => {{
-            selectedNode = nodeIdOrNull;
-            updateSelectedLabel();
-          }}
-        }});
-        if (selectedNode && selectedNode !== nodeIdOrNull) {{
-          entries.push({{
-            label: 'Connect selected → this node',
-            action: () => {{
-              connectNodes(selectedNode, nodeIdOrNull);
-              selectedNode = null;
-              updateSelectedLabel();
-            }}
-          }});
-        }}
-        entries.push({{
-          label: 'Edit label',
-          action: () => {{
-            editNodeLabel(nodeIdOrNull);
-          }}
-        }});
-        entries.push({{
-          label: 'Delete node',
-          action: () => deleteNode(nodeIdOrNull)
-        }});
-      }}
-
       const menu = document.createElement('div');
       menu.className = 'context-menu';
       menu.style.left = x + 'px';
       menu.style.top = y + 'px';
-
       entries.forEach(entry => {{
         const btn = document.createElement('button');
         btn.textContent = entry.label;
-        btn.onclick = () => {{
-          entry.action();
-          hideContextMenu();
-        }};
+        btn.onclick = () => {{ entry.action(); hideContextMenu(); }};
         menu.appendChild(btn);
       }});
-
       document.body.appendChild(menu);
       document.addEventListener('click', hideContextMenu, {{ once: true }});
     }}
 
-    function colorFor(kind) {{
-      if (kind === 'decision') return {{
-        background: '#e6f7eb', border: '#16a34a'
-      }};
-      if (kind === 'result') return {{
-        background: '#fff1e6', border: '#f97316'
-      }};
-      return {{ background: '#e0ecff', border: '#1d4ed8' }}; // event default
-    }}
+    // Double-click event
+    network.on('doubleClick', function(params) {{
+      const x = params.event.srcEvent.clientX;
+      const y = params.event.srcEvent.clientY;
+      if (params.nodes.length === 0) {{
+        showContextMenu(x, y, [
+          {{ label: 'Add Event Node', action: () => addNode('event') }},
+          {{ label: 'Add Decision Node', action: () => addNode('decision') }},
+          {{ label: 'Add Result Node', action: () => addNode('result') }},
+        ]);
+      }} else {{
+        const nodeId = params.nodes[0];
+        showContextMenu(x, y, [
+          {{ label: 'Select this node', action: () => {{ selectedNode = nodeId; updateSelectedLabel(); }} }},
+          ...(selectedNode && selectedNode !== nodeId ? [
+            {{ label: 'Connect selected → this node', action: () => {{
+              connectNodes(selectedNode, nodeId);
+              selectedNode = null;
+              updateSelectedLabel();
+            }}}}
+          ] : []),
+          {{ label: 'Edit label', action: () => editNodeLabel(nodeId) }},
+          {{ label: 'Delete node', action: () => deleteNode(nodeId) }}
+        ]);
+      }}
+    }});
 
     function addNode(kind) {{
       const id = 'n_' + Math.random().toString(36).substring(2, 8);
       const label = prompt('Enter ' + kind + ' label:', kind.charAt(0).toUpperCase() + kind.slice(1));
       if (!label) return;
-
-      const colors = colorFor(kind);
-      nodeMetaNodes[id] = {{ kind, label }};
-
+      const color = kind === 'event' ? '#e0ecff' : kind === 'decision' ? '#e6f7eb' : '#fff1e6';
+      const border = kind === 'event' ? '#1d4ed8' : kind === 'decision' ? '#16a34a' : '#f97316';
       nodes.add({{
-        id,
-        label,
+        id, label,
         shape: 'box',
-        color: {{
-          background: colors.background,
-          border: colors.border
-        }},
+        color: {{ background: color, border: border }},
         borderWidth: 2,
         margin: 10
       }});
-
-      // Optionally place it near center
-      const viewPos = network.getViewPosition();
-      const scale = network.getScale();
-      const x = viewPos.x;
-      const y = viewPos.y;
-      // small async to ensure node exists
-      requestAnimationFrame(() => {{
-        network.moveNode(id, x + (Math.random() * 100 - 50)/scale, y + (Math.random() * 100 - 50)/scale);
-      }});
+      nodeMeta.nodes[id] = {{ kind, label }};
     }}
 
     function editNodeLabel(nodeId) {{
-      const current = nodes.get(nodeId);
-      const newLabel = prompt('New label', current.label || '');
-      if (newLabel === null) return;
-      nodes.update({{ id: nodeId, label: newLabel }});
-      if (!nodeMetaNodes[nodeId]) nodeMetaNodes[nodeId] = {{ kind: 'event', label: '' }};
-      nodeMetaNodes[nodeId].label = newLabel;
+      const node = nodes.get(nodeId);
+      const newLabel = prompt('New label:', node.label || '');
+      if (newLabel !== null) {{
+        nodes.update({{ id: nodeId, label: newLabel }});
+        nodeMeta.nodes[nodeId].label = newLabel;
+      }}
     }}
 
     function deleteNode(nodeId) {{
-      // Remove edges attached to node
-      const toRemove = edges.get().filter(e => e.from === nodeId || e.to === nodeId).map(e => e.id);
-      edges.remove(toRemove);
-      if (nodeMetaEdges) {{
-        toRemove.forEach(id => delete nodeMetaEdges[id]);
-      }}
       nodes.remove(nodeId);
-      delete nodeMetaNodes[nodeId];
-      if (selectedNode === nodeId) {{
-        selectedNode = null;
-        updateSelectedLabel();
-      }}
+      edges.remove(edges.get().filter(e => e.from === nodeId || e.to === nodeId).map(e => e.id));
+      delete nodeMeta.nodes[nodeId];
     }}
 
     function connectNodes(sourceId, targetId) {{
       const label = prompt('Edge label (optional):', '');
       const probStr = prompt('Probability (optional):', '');
       const id = 'e_' + Math.random().toString(36).substring(2, 8);
-      const text = (label || '') + (probStr ? (label ? ' ' : '') + '(p=' + probStr + ')' : '');
-      edges.add({{ id, from: sourceId, to: targetId, label: text }});
-      nodeMetaEdges[id] = {{
-        label: label || null,
-        prob: probStr ? parseFloat(probStr) : null
-      }};
+      edges.add({{
+        id, from: sourceId, to: targetId,
+        label: (label || '') + (probStr ? ' (p=' + probStr + ')' : '')
+      }});
+      nodeMeta.edges[id] = {{ label: label || null, prob: probStr ? parseFloat(probStr) : null }};
     }}
 
-    // Send back to Streamlit
+    // Sync button
     document.getElementById('syncButton').onclick = function() {{
       const rebuilt = {{
         nodes: nodes.get().map(n => {{
-          const meta = nodeMetaNodes[n.id] || {{ kind: 'event', label: n.label }};
           return {{
             id: n.id,
             type: 'default',
-            position: {{}}, // we aren't storing vis coords
-            data: {{ label: meta.label }},
-            kind: meta.kind
+            position: {{}},
+            data: {{ label: nodeMeta.nodes?.[n.id]?.label ?? n.label }},
+            kind: nodeMeta.nodes?.[n.id]?.kind ?? 'event'
           }};
         }}),
         edges: edges.get().map(e => {{
-          const meta = nodeMetaEdges[e.id] || {{ label: null, prob: null }};
           return {{
             id: e.id,
             source: e.from,
             target: e.to,
-            label: meta.label,
-            data: meta.prob != null ? {{ prob: meta.prob }} : {{}}
+            label: nodeMeta.edges?.[e.id]?.label ?? null,
+            data: nodeMeta.edges?.[e.id]?.prob != null ? {{ prob: nodeMeta.edges[e.id].prob }} : {{}}
           }};
         }})
       }};
