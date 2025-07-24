@@ -41,7 +41,9 @@ def new_node_id() -> str:
 def add_node(label: str, node_type: str) -> str:
     node_id = new_node_id()
     st.session_state.tree["nodes"][node_id] = {
-        "id": node_id, "label": label.strip() if label else "(unnamed)", "type": node_type
+        "id": node_id,
+        "label": label.strip() if label else "(unnamed)",
+        "type": node_type
     }
     return node_id
 
@@ -54,7 +56,8 @@ def edit_node(node_id: str, new_label: str, new_type: str):
 def delete_node(node_id: str):
     st.session_state.tree["nodes"].pop(node_id, None)
     st.session_state.tree["edges"] = [
-        e for e in st.session_state.tree["edges"] if e["from"] != node_id and e["to"] != node_id
+        e for e in st.session_state.tree["edges"]
+        if e["from"] != node_id and e["to"] != node_id
     ]
     reset_sim()
 
@@ -103,7 +106,7 @@ def sanitize_prob(x) -> float | None:
 # -----------------------
 # Visualization
 # -----------------------
-def render_graph(highlight_edges=None):
+def render_graph(highlight_edges=None, color="red"):
     G = nx.DiGraph()
     labels = {}
 
@@ -115,25 +118,23 @@ def render_graph(highlight_edges=None):
         G.add_edge(edge["from"], edge["to"])
 
     pos = nx.spring_layout(G, seed=42)
-    plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(8, 6))
 
-    # Node colors
-    node_colors = []
-    for n in G.nodes():
-        node_type = st.session_state.tree["nodes"][n]["type"]
-        node_colors.append({"event": "skyblue", "response": "lightgreen", "outcome": "orange"}[node_type])
+    node_colors = [
+        {"event": "skyblue", "response": "lightgreen", "outcome": "orange"}[
+            st.session_state.tree["nodes"][n]["type"]
+        ]
+        for n in G.nodes()
+    ]
 
     nx.draw(G, pos, with_labels=True, labels=labels, node_color=node_colors,
-            node_size=2000, font_size=8, arrows=True)
+            node_size=2000, font_size=8, arrows=True, ax=ax)
 
-    # Highlighted edges
     if highlight_edges:
-        nx.draw_networkx_edges(
-            G, pos, edgelist=highlight_edges, width=3, edge_color="red"
-        )
+        nx.draw_networkx_edges(G, pos, edgelist=highlight_edges, width=3, edge_color=color, ax=ax)
 
-    st.pyplot(plt.gcf())
-    plt.close()
+    st.pyplot(fig)
+    plt.close(fig)
 
 # -----------------------
 # Monte Carlo
@@ -145,7 +146,7 @@ def choose_next_with_probs(current: str) -> str | None:
     probs = [e.get("p") or 1 for e in outs]
     return random.choices([e["to"] for e in outs], weights=probs, k=1)[0]
 
-def run_monte_carlo(start_node: str, n_runs: int, max_steps: int) -> Tuple[Counter, str]:
+def run_monte_carlo(start_node: str, n_runs: int, max_steps: int) -> Tuple[Counter, List[Tuple[str, str]]]:
     terminal_outcomes = Counter()
     path_counts = Counter()
 
@@ -163,12 +164,11 @@ def run_monte_carlo(start_node: str, n_runs: int, max_steps: int) -> Tuple[Count
         terminal_outcomes[node_label(current)] += 1
         path_counts[" → ".join(node_label(n) for n in path)] += 1
 
+    # Get the most common path and highlight its edges
     most_common_path = path_counts.most_common(1)[0][0].split(" → ")
-    highlight_edges = []
-    for i in range(len(most_common_path) - 1):
-        from_node = [k for k, v in st.session_state.tree["nodes"].items() if node_label(k) == most_common_path[i]][0]
-        to_node = [k for k, v in st.session_state.tree["nodes"].items() if node_label(k) == most_common_path[i + 1]][0]
-        highlight_edges.append((from_node, to_node))
+    node_map = {node_label(k): k for k in st.session_state.tree["nodes"]}
+    highlight_edges = [(node_map[most_common_path[i]], node_map[most_common_path[i + 1]])
+                       for i in range(len(most_common_path) - 1)]
 
     return terminal_outcomes, highlight_edges
 
@@ -252,7 +252,7 @@ with tabs[2]:
             df = pd.DataFrame([{"Node": k, "Count": v, "Pct": v / n_runs} for k, v in term.items()])
             st.dataframe(df, use_container_width=True)
             st.subheader("Most Probable Path Highlighted")
-            render_graph(highlight)
+            render_graph(highlight, color="blue")
     else:
         st.info("Add nodes to run Monte Carlo.")
 
