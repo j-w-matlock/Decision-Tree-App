@@ -1,34 +1,137 @@
 import json
 import uuid
 import urllib.parse
-
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Decision Tree – vis-network", layout="wide")
-st.title("🌳 Decision Tree – ComfyUI-style (Double-Click Menu)")
+st.set_page_config(page_title="Decision Tree – Sidebar Editor", layout="wide")
+st.title("🌳 Decision Tree – Sidebar + Canvas with Table Editor")
 
 # ---------------------------
 # Helpers & state
 # ---------------------------
+def new_node_id() -> str:
+    return f"n_{uuid.uuid4().hex[:6]}"
+
+def new_edge_id() -> str:
+    return f"e_{uuid.uuid4().hex[:6]}"
+
 if "graph" not in st.session_state:
     st.session_state.graph = {"nodes": [], "edges": []}
 
-# Ingest updates coming back from the front-end via query params
+graph = st.session_state.graph
+
+# Sync updates from query params if needed
 if "graph" in st.query_params:
     try:
         g = json.loads(urllib.parse.unquote(st.query_params["graph"]))
         if isinstance(g, dict) and "nodes" in g and "edges" in g:
             st.session_state.graph = g
+            graph = g
     except Exception as e:
         st.error(f"Failed to parse incoming graph: {e}")
     finally:
         st.query_params = {}
 
-graph = st.session_state.graph
+# ---------------------------
+# Sidebar Node Editor
+# ---------------------------
+st.sidebar.header("🛠 Node Management")
+
+# Add new node
+with st.sidebar.expander("Add Node"):
+    new_label = st.text_input("Label", key="new_label")
+    node_type = st.selectbox("Type", ["event", "decision", "result"], key="new_type")
+    if st.button("➕ Add Node"):
+        if new_label.strip():
+            new_id = new_node_id()
+            graph["nodes"].append({
+                "id": new_id,
+                "data": {"label": new_label},
+                "kind": node_type
+            })
+            st.success(f"Node '{new_label}' added.")
+            st.rerun()
+        else:
+            st.warning("Please enter a label.")
+
+# Editable Node Table
+if graph["nodes"]:
+    st.sidebar.subheader("Edit Nodes")
+    node_changes = []
+    for i, node in enumerate(graph["nodes"]):
+        with st.sidebar.expander(f"Node: {node['data']['label']}"):
+            new_label = st.text_input(f"Label for {node['id']}", node["data"]["label"], key=f"node_label_{i}")
+            new_kind = st.selectbox(f"Type for {node['id']}", ["event", "decision", "result"],
+                                    index=["event", "decision", "result"].index(node.get("kind", "event")),
+                                    key=f"node_type_{i}")
+            if new_label != node["data"]["label"] or new_kind != node.get("kind", "event"):
+                node_changes.append((i, new_label, new_kind))
+            if st.button(f"🗑 Delete {node['data']['label']}", key=f"delete_node_{i}"):
+                # Remove node and associated edges
+                node_id = node["id"]
+                graph["nodes"] = [n for n in graph["nodes"] if n["id"] != node_id]
+                graph["edges"] = [e for e in graph["edges"] if e["source"] != node_id and e["target"] != node_id]
+                st.success(f"Deleted node {node['data']['label']}.")
+                st.rerun()
+    if node_changes:
+        for i, new_label, new_kind in node_changes:
+            graph["nodes"][i]["data"]["label"] = new_label
+            graph["nodes"][i]["kind"] = new_kind
+        st.rerun()
 
 # ---------------------------
-# UI: Import / Export / Clear
+# Sidebar Edge Editor
+# ---------------------------
+st.sidebar.header("🔗 Edge Management")
+
+# Add Edge
+if len(graph["nodes"]) >= 2:
+    with st.sidebar.expander("Add Edge"):
+        node_labels = {n["id"]: n["data"]["label"] for n in graph["nodes"]}
+        source = st.selectbox("Source", list(node_labels.keys()), format_func=lambda x: node_labels[x], key="edge_src")
+        target = st.selectbox("Target",
+                              [n["id"] for n in graph["nodes"] if n["id"] != source],
+                              format_func=lambda x: node_labels[x], key="edge_tgt")
+        edge_label = st.text_input("Edge Label (optional)", key="edge_label")
+        edge_prob = st.number_input("Probability (optional)", min_value=0.0, max_value=1.0, step=0.01, key="edge_prob")
+        if st.button("➕ Add Edge"):
+            new_edge = {
+                "id": new_edge_id(),
+                "source": source,
+                "target": target,
+                "label": edge_label or None,
+                "data": {"prob": edge_prob} if edge_prob else {}
+            }
+            graph["edges"].append(new_edge)
+            st.success(f"Connected '{node_labels[source]}' → '{node_labels[target]}'.")
+            st.rerun()
+
+# Editable Edge Table
+if graph["edges"]:
+    st.sidebar.subheader("Edit Edges")
+    edge_changes = []
+    for i, edge in enumerate(graph["edges"]):
+        with st.sidebar.expander(f"Edge {edge['source']} → {edge['target']}"):
+            new_label = st.text_input(f"Label for {edge['id']}", edge.get("label", "") or "", key=f"edge_label_{i}")
+            new_prob = st.number_input(f"Probability for {edge['id']}",
+                                       value=edge.get("data", {}).get("prob", 0.0),
+                                       min_value=0.0, max_value=1.0, step=0.01,
+                                       key=f"edge_prob_{i}")
+            if new_label != edge.get("label") or new_prob != edge.get("data", {}).get("prob", 0.0):
+                edge_changes.append((i, new_label, new_prob))
+            if st.button(f"🗑 Delete Edge {edge['id']}", key=f"delete_edge_{i}"):
+                graph["edges"] = [e for e in graph["edges"] if e["id"] != edge["id"]]
+                st.success(f"Deleted edge {edge['id']}.")
+                st.rerun()
+    if edge_changes:
+        for i, new_label, new_prob in edge_changes:
+            graph["edges"][i]["label"] = new_label or None
+            graph["edges"][i]["data"]["prob"] = new_prob
+        st.rerun()
+
+# ---------------------------
+# Canvas Export/Import
 # ---------------------------
 c1, c2, c3 = st.columns(3)
 with c1:
@@ -56,16 +159,15 @@ with c3:
         st.rerun()
 
 with st.expander("Current graph JSON (debug)"):
-    st.code(json.dumps(st.session_state.graph, indent=2))
+    st.code(json.dumps(graph, indent=2))
 
 # ---------------------------
-# Prepare data for the front-end
+# Canvas Visualization (vis-network)
 # ---------------------------
 nodes_js = json.dumps([
     {
         "id": n["id"],
         "label": n["data"]["label"],
-        "kind": n.get("kind", "event"),
         "shape": "box",
         "color": {
             "background": {
@@ -98,22 +200,6 @@ edges_js = json.dumps([
     for e in graph["edges"]
 ])
 
-node_meta = {
-    n["id"]: {"kind": n.get("kind", "event"), "label": n["data"]["label"]}
-    for n in graph["nodes"]
-}
-edge_meta = {
-    e["id"]: {
-        "label": e.get("label"),
-        "prob": e.get("data", {}).get("prob")
-    }
-    for e in graph["edges"]
-}
-meta_js = json.dumps({"nodes": node_meta, "edges": edge_meta})
-
-# ---------------------------
-# Robust vis-network HTML + JS (Double-Click Menu)
-# ---------------------------
 html = f"""
 <!DOCTYPE html>
 <html>
@@ -121,245 +207,30 @@ html = f"""
   <meta charset="utf-8" />
   <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
   <style>
-    html, body {{
-      height: 100%;
-      margin: 0;
-      background: #f8fafc;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
-    }}
-    #wrapper {{
-      position: relative;
-      height: 620px;
-    }}
+    html, body {{ height: 100%; margin: 0; background: #f8fafc; }}
     #network {{
-      position: absolute;
-      inset: 0;
+      height: 600px;
       background: #f1f5f9;
       border-radius: 8px;
       border: 1px solid #cbd5e1;
     }}
-    .context-menu {{
-      position: fixed;
-      background: #ffffff;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      z-index: 999999;
-      padding: 4px 0;
-      min-width: 200px;
-    }}
-    .context-menu button {{
-      display: block;
-      width: 100%;
-      padding: 6px 12px;
-      background: transparent;
-      border: none;
-      text-align: left;
-      cursor: pointer;
-      font-size: 14px;
-    }}
-    .context-menu button:hover {{
-      background: #f1f5f9;
-    }}
-    .floating-sync {{
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 999998;
-      border: none;
-      background: #1d4ed8;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      font-size: 14px;
-    }}
-    .floating-sync:hover {{
-      background: #2563eb;
-    }}
-    #selected-label {{
-      position: absolute;
-      top: 50px;
-      right: 10px;
-      background: #fff8dc;
-      border: 1px solid #cbd5e1;
-      padding: 4px 8px;
-      border-radius: 4px;
-      display: none;
-      font-size: 12px;
-      z-index: 999998;
-    }}
   </style>
 </head>
 <body>
-  <div id="wrapper">
-    <div id="network"></div>
-    <button class="floating-sync" id="syncButton" title="Send changes to Streamlit">Sync to Streamlit</button>
-    <div id="selected-label">Selected node: <span id="selected-node-id"></span></div>
-  </div>
-
+  <div id="network"></div>
   <script>
-    const nodeMeta = {meta_js};
     const nodes = new vis.DataSet({nodes_js});
     const edges = new vis.DataSet({edges_js});
-
     const container = document.getElementById('network');
-    const data = {{ nodes: nodes, edges: edges }};
+    const data = {{ nodes, edges }};
     const options = {{
-      interaction: {{
-        multiselect: true,
-        selectConnectedEdges: false,
-        dragView: true,
-        zoomView: true
-      }},
-      physics: {{
-        stabilization: {{ iterations: 300 }}
-      }},
-      edges: {{
-        arrows: {{ to: {{ enabled: true }} }}
-      }},
-      nodes: {{
-        shape: 'box',
-        margin: 10,
-        borderWidth: 2
-      }}
+      interaction: {{ dragView: true, zoomView: true }},
+      physics: {{ stabilization: {{ iterations: 300 }} }},
+      edges: {{ arrows: {{ to: {{ enabled: true }} }} }}
     }};
     const network = new vis.Network(container, data, options);
-
-    let selectedNode = null;
-    const selectedLabelDiv = document.getElementById('selected-label');
-    const selectedNodeSpan = document.getElementById('selected-node-id');
-
-    function updateSelectedLabel() {{
-      if (selectedNode) {{
-        selectedNodeSpan.textContent = selectedNode;
-        selectedLabelDiv.style.display = 'block';
-      }} else {{
-        selectedLabelDiv.style.display = 'none';
-      }}
-    }}
-
-    // Context Menu Helpers
-    function hideContextMenu() {{
-      const menu = document.querySelector('.context-menu');
-      if (menu) menu.remove();
-    }}
-
-    function showContextMenu(x, y, entries) {{
-      hideContextMenu();
-      const menu = document.createElement('div');
-      menu.className = 'context-menu';
-      menu.style.left = x + 'px';
-      menu.style.top = y + 'px';
-      entries.forEach(entry => {{
-        const btn = document.createElement('button');
-        btn.textContent = entry.label;
-        btn.onclick = () => {{ entry.action(); hideContextMenu(); }};
-        menu.appendChild(btn);
-      }});
-      document.body.appendChild(menu);
-      document.addEventListener('click', hideContextMenu, {{ once: true }});
-    }}
-
-    // Double-click event
-    network.on('doubleClick', function(params) {{
-      const x = params.event.srcEvent.clientX;
-      const y = params.event.srcEvent.clientY;
-      if (params.nodes.length === 0) {{
-        showContextMenu(x, y, [
-          {{ label: 'Add Event Node', action: () => addNode('event') }},
-          {{ label: 'Add Decision Node', action: () => addNode('decision') }},
-          {{ label: 'Add Result Node', action: () => addNode('result') }},
-        ]);
-      }} else {{
-        const nodeId = params.nodes[0];
-        showContextMenu(x, y, [
-          {{ label: 'Select this node', action: () => {{ selectedNode = nodeId; updateSelectedLabel(); }} }},
-          ...(selectedNode && selectedNode !== nodeId ? [
-            {{ label: 'Connect selected → this node', action: () => {{
-              connectNodes(selectedNode, nodeId);
-              selectedNode = null;
-              updateSelectedLabel();
-            }}}}
-          ] : []),
-          {{ label: 'Edit label', action: () => editNodeLabel(nodeId) }},
-          {{ label: 'Delete node', action: () => deleteNode(nodeId) }}
-        ]);
-      }}
-    }});
-
-    function addNode(kind) {{
-      const id = 'n_' + Math.random().toString(36).substring(2, 8);
-      const label = prompt('Enter ' + kind + ' label:', kind.charAt(0).toUpperCase() + kind.slice(1));
-      if (!label) return;
-      const color = kind === 'event' ? '#e0ecff' : kind === 'decision' ? '#e6f7eb' : '#fff1e6';
-      const border = kind === 'event' ? '#1d4ed8' : kind === 'decision' ? '#16a34a' : '#f97316';
-      nodes.add({{
-        id, label,
-        shape: 'box',
-        color: {{ background: color, border: border }},
-        borderWidth: 2,
-        margin: 10
-      }});
-      nodeMeta.nodes[id] = {{ kind, label }};
-    }}
-
-    function editNodeLabel(nodeId) {{
-      const node = nodes.get(nodeId);
-      const newLabel = prompt('New label:', node.label || '');
-      if (newLabel !== null) {{
-        nodes.update({{ id: nodeId, label: newLabel }});
-        nodeMeta.nodes[nodeId].label = newLabel;
-      }}
-    }}
-
-    function deleteNode(nodeId) {{
-      nodes.remove(nodeId);
-      edges.remove(edges.get().filter(e => e.from === nodeId || e.to === nodeId).map(e => e.id));
-      delete nodeMeta.nodes[nodeId];
-    }}
-
-    function connectNodes(sourceId, targetId) {{
-      const label = prompt('Edge label (optional):', '');
-      const probStr = prompt('Probability (optional):', '');
-      const id = 'e_' + Math.random().toString(36).substring(2, 8);
-      edges.add({{
-        id, from: sourceId, to: targetId,
-        label: (label || '') + (probStr ? ' (p=' + probStr + ')' : '')
-      }});
-      nodeMeta.edges[id] = {{ label: label || null, prob: probStr ? parseFloat(probStr) : null }};
-    }}
-
-    // Sync button
-    document.getElementById('syncButton').onclick = function() {{
-      const rebuilt = {{
-        nodes: nodes.get().map(n => {{
-          return {{
-            id: n.id,
-            type: 'default',
-            position: {{}},
-            data: {{ label: nodeMeta.nodes?.[n.id]?.label ?? n.label }},
-            kind: nodeMeta.nodes?.[n.id]?.kind ?? 'event'
-          }};
-        }}),
-        edges: edges.get().map(e => {{
-          return {{
-            id: e.id,
-            source: e.from,
-            target: e.to,
-            label: nodeMeta.edges?.[e.id]?.label ?? null,
-            data: nodeMeta.edges?.[e.id]?.prob != null ? {{ prob: nodeMeta.edges[e.id].prob }} : {{}}
-          }};
-        }})
-      }};
-      const payload = encodeURIComponent(JSON.stringify(rebuilt));
-      const base = window.location.href.split('?')[0];
-      window.location.href = base + '?graph=' + payload;
-    }};
   </script>
 </body>
 </html>
 """
-
 components.html(html, height=650, scrolling=False)
