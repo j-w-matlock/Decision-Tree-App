@@ -7,7 +7,7 @@ st.set_page_config(page_title="Decision Tree – React Flow", layout="wide")
 st.title("🌳 Decision Tree – Streamlit + React Flow (Embedded)")
 
 # ---------------------------
-# Session state bootstrapping
+# Session state
 # ---------------------------
 if "graph" not in st.session_state:
     st.session_state.graph = {"nodes": [], "edges": []}
@@ -28,7 +28,7 @@ def node_kind_style(kind: str) -> dict:
     return {"border": f"2px solid {border}", "background": bg, "borderRadius": 6, "padding": 6, "minWidth": 120}
 
 # ---------------------------
-# UI: Nodes
+# Toolbar
 # ---------------------------
 st.subheader("Toolbar")
 
@@ -96,82 +96,22 @@ if not st.session_state.graph["nodes"]:
         "data": {"label": "Hello React Flow"}
     }]
 
-# ---------------------------
-# Debug print
-# ---------------------------
-st.subheader("Current Graph JSON")
-st.code(json.dumps(st.session_state.graph, indent=2))
-
-# ---------------------------
-# Canvas
-# ---------------------------
-st.subheader("Canvas")
-
 nodes = st.session_state.graph["nodes"]
 edges = st.session_state.graph["edges"]
-
-reactflow_html = f"""
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>React Flow</title>
-    <style>
-      html, body, #root {{
-        height: 100%;
-        margin: 0;
-        background: #f0f0f0;
-      }}
-      .react-flow__node {{
-        border: 1px solid #777;
-        padding: 5px;
-        border-radius: 3px;
-        background: white;
-      }}
-    </style>
-    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/reactflow/dist/umd/react-flow.production.min.js"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script>
-      const {{ ReactFlow, ReactFlowProvider, MiniMap, Controls, Background }} = window.ReactFlow;
-
-      const nodes = {json.dumps(nodes)};
-      const edges = {json.dumps(edges)};
-
-      ReactDOM.render(
-        React.createElement(ReactFlowProvider, null,
-          React.createElement("div", {{ style: {{ width: "100%", height: "600px" }} }},
-            React.createElement(ReactFlow, {{
-              nodes: nodes,
-              edges: edges,
-              fitView: true
-            }},
-              React.createElement(MiniMap, null),
-              React.createElement(Controls, null),
-              React.createElement(Background, null)
-            )
-          )
-        ),
-        document.getElementById("root")
-      );
-    </script>
-  </body>
-</html>
-"""
-components.html(reactflow_html, height=620, scrolling=False)
+labels = {n["id"]: n["data"]["label"] for n in nodes}
 
 # ---------------------------
-# Import JSON
+# Edge Management
 # ---------------------------
-st.subheader("Import JSON")
-uploaded = st.file_uploader("Upload decision_tree.json", type=["json"])
-if uploaded:
-    try:
-        st.session_state.graph = json.load(uploaded)
-        st.success("Graph imported!")
-        st.rerun()
-    except Exception as e:
-        st.error(f"Failed to import: {e}")
+st.subheader("Manage Edges")
+
+with st.form("add_edge_form", clear_on_submit=True):
+    st.markdown("**Add Edge**")
+    if nodes:
+        src = st.selectbox("From (source node)", [n["id"] for n in nodes], format_func=lambda i: f"{labels[i]} ({i})")
+        dst = st.selectbox("To (target node)", [n["id"] for n in nodes], format_func=lambda i: f"{labels[i]} ({i})")
+        label = st.text_input("Label (optional)")
+        prob = st.text_input("Probability (optional, e.g., 0.3)")
+        submitted = st.form_submit_button("➕ Add Edge")
+        if submitted:
+            if src == dst:
