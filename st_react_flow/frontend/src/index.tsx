@@ -1,10 +1,10 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './style.css'
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { withStreamlitConnection } from "streamlit-component-lib";
+import App from "./App";
+import "./style.css";
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+const Connected = withStreamlitConnection(App);
+
+const root = createRoot(document.getElementById("root")!);
+root.render(<Connected />);
