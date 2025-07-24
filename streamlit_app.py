@@ -164,6 +164,8 @@ st.divider()
 # ---------------------------
 st.subheader("Canvas")
 
+elements = nodes + edges  # Combine nodes and edges for React Flow's UMD build
+
 reactflow_html = f"""
 <!DOCTYPE html>
 <html>
@@ -192,15 +194,13 @@ reactflow_html = f"""
     <script>
       const {{ ReactFlow, ReactFlowProvider, MiniMap, Controls, Background }} = window.ReactFlow;
 
-      const nodes = {json.dumps(nodes)};
-      const edges = {json.dumps(edges)};
+      const elements = {json.dumps(elements)};
 
       ReactDOM.render(
         React.createElement(ReactFlowProvider, null,
           React.createElement("div", {{ style: {{ width: "100%", height: "600px" }} }},
             React.createElement(ReactFlow, {{
-              nodes: nodes,
-              edges: edges,
+              elements: elements,
               fitView: true
             }},
               React.createElement(MiniMap, null),
