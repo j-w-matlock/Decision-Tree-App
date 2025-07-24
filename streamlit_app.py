@@ -4,8 +4,8 @@ import urllib.parse
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Decision Tree – Sidebar Editor", layout="wide")
-st.title("🌳 Decision Tree – Sidebar + Canvas with Table Editor")
+st.set_page_config(page_title="Decision Tree – Connected Layout", layout="wide")
+st.title("🌳 Decision Tree – Connected (Event → Decision → Result)")
 
 # ---------------------------
 # Helpers & state
@@ -68,7 +68,6 @@ if graph["nodes"]:
             if new_label != node["data"]["label"] or new_kind != node.get("kind", "event"):
                 node_changes.append((i, new_label, new_kind))
             if st.button(f"🗑 Delete {node['data']['label']}", key=f"delete_node_{i}"):
-                # Remove node and associated edges
                 node_id = node["id"]
                 graph["nodes"] = [n for n in graph["nodes"] if n["id"] != node_id]
                 graph["edges"] = [e for e in graph["edges"] if e["source"] != node_id and e["target"] != node_id]
@@ -224,9 +223,22 @@ html = f"""
     const container = document.getElementById('network');
     const data = {{ nodes, edges }};
     const options = {{
-      interaction: {{ dragView: true, zoomView: true }},
-      physics: {{ stabilization: {{ iterations: 300 }} }},
-      edges: {{ arrows: {{ to: {{ enabled: true }} }} }}
+      layout: {{
+        hierarchical: {{
+          enabled: true,
+          direction: "UD",
+          sortMethod: "directed",
+          nodeSpacing: 150,
+          treeSpacing: 200,
+          levelSeparation: 200
+        }}
+      }},
+      edges: {{
+        arrows: {{ to: {{ enabled: true }} }},
+        smooth: true
+      }},
+      physics: false,
+      interaction: {{ dragView: true, zoomView: true }}
     }};
     const network = new vis.Network(container, data, options);
   </script>
