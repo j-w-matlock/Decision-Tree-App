@@ -6,9 +6,13 @@ import streamlit.components.v1 as components
 _component_dir = os.path.dirname(os.path.abspath(__file__))
 _build_dir = os.path.join(_component_dir, "build")
 
-# Verify build directory exists
+# Diagnostics: print path info
+st.write(f"🔍 React Flow Component Path: {_build_dir}")
 if not os.path.exists(_build_dir):
-    st.warning(f"⚠️ React Flow build directory not found: {_build_dir}")
+    st.error(f"❌ React Flow build directory not found: {_build_dir}")
+    st.warning("Please ensure you ran `npm run build` in st_react_flow/frontend and committed the build folder.")
+else:
+    st.success("✅ React Flow build directory found.")
 
 # Declare the production component
 _react_flow_prod = components.declare_component(
