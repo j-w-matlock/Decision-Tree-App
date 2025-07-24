@@ -4,8 +4,8 @@ import urllib.parse
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Decision Tree – Connected Layout", layout="wide")
-st.title("🌳 Decision Tree – Connected (Event → Decision → Result)")
+st.set_page_config(page_title="Decision Tree – Left to Right", layout="wide")
+st.title("🌳 Decision Tree – Left to Right Layout")
 
 # ---------------------------
 # Helpers & state
@@ -42,16 +42,16 @@ st.sidebar.header("🛠 Node Management")
 with st.sidebar.expander("Add Node"):
     new_label = st.text_input("Label", key="new_label")
     node_type = st.selectbox("Type", ["event", "decision", "result"], key="new_type")
-    if st.button("➕ Add Node"):
+    if st.button("➕ Add Node", key="add_node_btn"):
         if new_label.strip():
             new_id = new_node_id()
-            graph["nodes"].append({
+            st.session_state.graph["nodes"].append({
                 "id": new_id,
                 "data": {"label": new_label},
                 "kind": node_type
             })
             st.success(f"Node '{new_label}' added.")
-            st.rerun()
+            st.experimental_rerun()
         else:
             st.warning("Please enter a label.")
 
@@ -67,17 +67,20 @@ if graph["nodes"]:
                                     key=f"node_type_{i}")
             if new_label != node["data"]["label"] or new_kind != node.get("kind", "event"):
                 node_changes.append((i, new_label, new_kind))
-            if st.button(f"🗑 Delete {node['data']['label']}", key=f"delete_node_{i}"):
+            delete_key = f"delete_node_{i}"
+            if st.button(f"🗑 Delete {node['data']['label']}", key=delete_key):
                 node_id = node["id"]
-                graph["nodes"] = [n for n in graph["nodes"] if n["id"] != node_id]
-                graph["edges"] = [e for e in graph["edges"] if e["source"] != node_id and e["target"] != node_id]
+                st.session_state.graph["nodes"] = [n for n in graph["nodes"] if n["id"] != node_id]
+                st.session_state.graph["edges"] = [
+                    e for e in graph["edges"] if e["source"] != node_id and e["target"] != node_id
+                ]
                 st.success(f"Deleted node {node['data']['label']}.")
-                st.rerun()
+                st.experimental_rerun()
     if node_changes:
         for i, new_label, new_kind in node_changes:
             graph["nodes"][i]["data"]["label"] = new_label
             graph["nodes"][i]["kind"] = new_kind
-        st.rerun()
+        st.experimental_rerun()
 
 # ---------------------------
 # Sidebar Edge Editor
@@ -94,7 +97,7 @@ if len(graph["nodes"]) >= 2:
         edge_label = st.text_input("Edge Label (optional)", key="edge_label")
         edge_prob = st.number_input("Probability (optional)", min_value=0.0, max_value=1.0, step=0.01, key="edge_prob")
 
-        if st.button("➕ Add Edge"):
+        if st.button("➕ Add Edge", key="add_edge_btn"):
             # --- Validation Rules ---
             src_kind = next((n.get("kind", "event") for n in graph["nodes"] if n["id"] == source), "event")
             tgt_kind = next((n.get("kind", "event") for n in graph["nodes"] if n["id"] == target), "event")
@@ -115,9 +118,9 @@ if len(graph["nodes"]) >= 2:
                     "label": edge_label or None,
                     "data": {"prob": edge_prob} if edge_prob else {}
                 }
-                graph["edges"].append(new_edge)
+                st.session_state.graph["edges"].append(new_edge)
                 st.success(f"Connected '{node_labels[source]}' → '{node_labels[target]}'.")
-                st.rerun()
+                st.experimental_rerun()
 
 # Editable Edge Table
 if graph["edges"]:
@@ -132,15 +135,16 @@ if graph["edges"]:
                                        key=f"edge_prob_{i}")
             if new_label != edge.get("label") or new_prob != edge.get("data", {}).get("prob", 0.0):
                 edge_changes.append((i, new_label, new_prob))
-            if st.button(f"🗑 Delete Edge {edge['id']}", key=f"delete_edge_{i}"):
-                graph["edges"] = [e for e in graph["edges"] if e["id"] != edge["id"]]
+            delete_edge_key = f"delete_edge_{i}"
+            if st.button(f"🗑 Delete Edge {edge['id']}", key=delete_edge_key):
+                st.session_state.graph["edges"] = [e for e in graph["edges"] if e["id"] != edge["id"]]
                 st.success(f"Deleted edge {edge['id']}.")
-                st.rerun()
+                st.experimental_rerun()
     if edge_changes:
         for i, new_label, new_prob in edge_changes:
             graph["edges"][i]["label"] = new_label or None
             graph["edges"][i]["data"]["prob"] = new_prob
-        st.rerun()
+        st.experimental_rerun()
 
 # ---------------------------
 # Canvas Export/Import
@@ -153,22 +157,23 @@ with c1:
         file_name="decision_tree.json",
         mime="application/json",
         use_container_width=True,
+        key="export_json_btn",
     )
 
 with c2:
-    uploaded = st.file_uploader("Upload decision_tree.json", type=["json"])
+    uploaded = st.file_uploader("Upload decision_tree.json", type=["json"], key="upload_json_btn")
     if uploaded:
         try:
             st.session_state.graph = json.load(uploaded)
             st.success("Graph imported.")
-            st.rerun()
+            st.experimental_rerun()
         except Exception as e:
             st.error(f"Import failed: {e}")
 
 with c3:
-    if st.button("🗑 Clear Canvas", use_container_width=True):
+    if st.button("🗑 Clear Canvas", use_container_width=True, key="clear_canvas_btn"):
         st.session_state.graph = {"nodes": [], "edges": []}
-        st.rerun()
+        st.experimental_rerun()
 
 with st.expander("Current graph JSON (debug)"):
     st.code(json.dumps(graph, indent=2))
@@ -239,7 +244,7 @@ html = f"""
       layout: {{
         hierarchical: {{
           enabled: true,
-          direction: "UD",
+          direction: "LR",  // Left to Right
           sortMethod: "directed",
           nodeSpacing: 150,
           treeSpacing: 200,
