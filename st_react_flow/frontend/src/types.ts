@@ -1,4 +1,4 @@
-export type NodeKind = 'event' | 'decision' | 'result';
+export type NodeKind = "event" | "decision" | "result";
 
 export interface NodeData {
   label: string;

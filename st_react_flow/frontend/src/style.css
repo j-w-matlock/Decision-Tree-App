@@ -1,5 +1,39 @@
-html, body, #root { height: 100%; margin: 0; }
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+}
+
 .toolbar {
-  position: absolute; top: 10px; left: 10px; z-index: 10;
-  display: flex; gap: 8px; padding: 8px; background: #ffffffc7; border-radius: 6px;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+button {
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #1d4ed8;
+  color: white;
+  font-weight: 500;
+}
+
+button:hover {
+  background: #2563eb;
+}
+
+a {
+  text-decoration: none;
+  color: #1d4ed8;
+  font-weight: bold;
 }

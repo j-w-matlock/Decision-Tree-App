@@ -4,7 +4,11 @@ import { withStreamlitConnection } from "streamlit-component-lib";
 import App from "./App";
 import "./style.css";
 
-const Connected = withStreamlitConnection(App);
+const ConnectedApp = withStreamlitConnection(App);
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<Connected />);
+root.render(
+  <React.StrictMode>
+    <ConnectedApp />
+  </React.StrictMode>
+);
