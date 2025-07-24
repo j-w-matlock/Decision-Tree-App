@@ -84,7 +84,6 @@ if graph["nodes"]:
 # ---------------------------
 st.sidebar.header("🔗 Edge Management")
 
-# Add Edge
 if len(graph["nodes"]) >= 2:
     with st.sidebar.expander("Add Edge"):
         node_labels = {n["id"]: n["data"]["label"] for n in graph["nodes"]}
@@ -94,17 +93,31 @@ if len(graph["nodes"]) >= 2:
                               format_func=lambda x: node_labels[x], key="edge_tgt")
         edge_label = st.text_input("Edge Label (optional)", key="edge_label")
         edge_prob = st.number_input("Probability (optional)", min_value=0.0, max_value=1.0, step=0.01, key="edge_prob")
+
         if st.button("➕ Add Edge"):
-            new_edge = {
-                "id": new_edge_id(),
-                "source": source,
-                "target": target,
-                "label": edge_label or None,
-                "data": {"prob": edge_prob} if edge_prob else {}
-            }
-            graph["edges"].append(new_edge)
-            st.success(f"Connected '{node_labels[source]}' → '{node_labels[target]}'.")
-            st.rerun()
+            # --- Validation Rules ---
+            src_kind = next((n.get("kind", "event") for n in graph["nodes"] if n["id"] == source), "event")
+            tgt_kind = next((n.get("kind", "event") for n in graph["nodes"] if n["id"] == target), "event")
+
+            if source == target:
+                st.warning("❌ Cannot connect a node to itself.")
+            elif src_kind == "event" and tgt_kind == "event":
+                st.warning("❌ Cannot connect Event → Event directly. Use Event → Decision.")
+            elif any(e for e in graph["edges"] if e["source"] == source and e["target"] == target):
+                st.warning("❌ Edge already exists.")
+            elif any(e for e in graph["edges"] if e["source"] == target and e["target"] == source):
+                st.warning("❌ Cannot create a cycle between these nodes.")
+            else:
+                new_edge = {
+                    "id": new_edge_id(),
+                    "source": source,
+                    "target": target,
+                    "label": edge_label or None,
+                    "data": {"prob": edge_prob} if edge_prob else {}
+                }
+                graph["edges"].append(new_edge)
+                st.success(f"Connected '{node_labels[source]}' → '{node_labels[target]}'.")
+                st.rerun()
 
 # Editable Edge Table
 if graph["edges"]:
