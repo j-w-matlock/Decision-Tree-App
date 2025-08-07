@@ -1,6 +1,7 @@
 import json
 import uuid
 from collections import defaultdict
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -59,7 +60,9 @@ def auto_compute_probabilities(graph: dict):
 # Session state
 # ---------------------------
 if "graph" not in st.session_state:
-    st.session_state.graph = {"nodes": [], "edges": []}
+    example_path = Path(__file__).parent / "examples" / "basic_tree.json"
+    with example_path.open() as f:
+        st.session_state.graph = json.load(f)
 
 graph = st.session_state.graph
 
