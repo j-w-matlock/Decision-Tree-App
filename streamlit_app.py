@@ -1,10 +1,12 @@
 import json
 import uuid
-import urllib.parse
 from collections import defaultdict
 
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+
+from decision_tree_app import DecisionTree
 
 st.set_page_config(page_title="Decision Tree – Auto-Compute & Export", layout="wide")
 st.title("🌳 Decision Tree – Left → Right with Auto-Compute & PNG Export")
@@ -168,6 +170,21 @@ if warnings:
     st.markdown("#### ⚠️ Warnings")
     for w in warnings:
         st.warning(w)
+
+# ---------------------------
+# Decision Pathways
+# ---------------------------
+tree = DecisionTree.from_graph(graph)
+paths = tree.pathways()
+if paths:
+    st.markdown("#### 🗺 Decision Pathways")
+    df = pd.DataFrame(
+        {
+            "Path": [" → ".join(p.steps) for p in paths],
+            "Probability": [round(p.probability, 3) for p in paths],
+        }
+    )
+    st.table(df)
 
 # ---------------------------
 # Canvas Visualization
