@@ -38,7 +38,7 @@ An interactive Streamlit app for creating and analysing decision trees from left
 
 ## Examples and Tutorials
 
-An example JSON file is provided at [`examples/basic_tree.json`](examples/basic_tree.json).
+An example JSON file is provided at [`examples/basic_tree.json`](examples/basic_tree.json) and is loaded by default when the app starts so you can see the expected format.
 Additional tutorials and sample trees will be added to the repository.
 
 ## License
