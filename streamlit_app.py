@@ -83,8 +83,9 @@ with st.sidebar.expander("➕ Add Node", expanded=True):
 st.sidebar.header("🔗 Edge Management")
 
 if len(graph["nodes"]) >= 2:
+    node_labels = {n["id"]: n["data"]["label"] for n in graph["nodes"]}
+
     with st.sidebar.expander("➕ Add Edge", expanded=True):
-        node_labels = {n["id"]: n["data"]["label"] for n in graph["nodes"]}
         with st.form("add_edge_form", clear_on_submit=True):
             source = st.selectbox("Source", list(node_labels.keys()), format_func=lambda x: node_labels[x],
                                   help="Select the starting node.")
@@ -114,6 +115,44 @@ if len(graph["nodes"]) >= 2:
                         "target": target,
                         "label": edge_label or None,
                         "data": {"prob": edge_prob} if edge_prob_enabled else {}
+                    })
+                    st.rerun()
+
+    if graph["edges"]:
+        with st.sidebar.expander("✏️ Edit Edge", expanded=False):
+            edge_options = {
+                e["id"]: f"{node_labels[e['source']]} → {node_labels[e['target']]}" for e in graph["edges"]
+            }
+            edge_id = st.selectbox("Edge", list(edge_options.keys()), format_func=lambda x: edge_options[x])
+            edge = next(e for e in graph["edges"] if e["id"] == edge_id)
+            node_ids = list(node_labels.keys())
+            with st.form(f"edit_edge_form_{edge_id}"):
+                source_idx = node_ids.index(edge["source"]) if edge["source"] in node_ids else 0
+                source = st.selectbox("Source", node_ids, index=source_idx, format_func=lambda x: node_labels[x])
+                target_opts = [nid for nid in node_ids if nid != source]
+                target_idx = target_opts.index(edge["target"]) if edge["target"] in target_opts else 0
+                target = st.selectbox("Target", target_opts, index=target_idx, format_func=lambda x: node_labels[x])
+                edge_label = st.text_input("Edge label (optional)", value=edge.get("label") or "")
+                current_prob = edge.get("data", {}).get("prob")
+                prob_enabled = st.checkbox("Add probability", value=current_prob is not None)
+                if prob_enabled:
+                    current_prob = st.number_input("Probability", min_value=0.0, max_value=1.0, step=0.01, value=current_prob or 0.5)
+                update_btn = st.form_submit_button("Update edge")
+            if update_btn:
+                src_kind = next((n.get("kind", "event") for n in graph["nodes"] if n["id"] == source), "event")
+                tgt_kind = next((n.get("kind", "event") for n in graph["nodes"] if n["id"] == target), "event")
+                if source == target:
+                    st.warning("❌ Cannot connect a node to itself.")
+                elif src_kind == "event" and tgt_kind == "event":
+                    st.warning("❌ Cannot connect Event → Event directly.")
+                elif any(e for e in graph["edges"] if e["source"] == source and e["target"] == target and e["id"] != edge_id):
+                    st.warning("❌ Edge already exists.")
+                else:
+                    edge.update({
+                        "source": source,
+                        "target": target,
+                        "label": edge_label or None,
+                        "data": {"prob": current_prob} if prob_enabled else {},
                     })
                     st.rerun()
 
