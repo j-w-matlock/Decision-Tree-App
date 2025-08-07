@@ -136,10 +136,15 @@ if len(graph["nodes"]) >= 2:
                                   help="Select the ending node.")
             edge_label = st.text_input("Edge label (optional)", help="Add an optional label, e.g., 'Yes' or 'No'.")
             edge_prob_enabled = st.checkbox("Add probability", help="Assign a probability to this edge.")
-            edge_prob = None
-            if edge_prob_enabled:
-                edge_prob = st.number_input("Probability", min_value=0.0, max_value=1.0, step=0.01, value=0.5,
-                                            help="Set probability between 0 and 1.")
+            edge_prob = st.number_input(
+                "Probability",
+                min_value=0.0,
+                max_value=1.0,
+                step=0.01,
+                value=0.5,
+                help="Set probability between 0 and 1.",
+                disabled=not edge_prob_enabled,
+            )
             add_edge_btn = st.form_submit_button("Add edge", help="Create a connection between the selected nodes.")
             if add_edge_btn:
                 src_kind = next((n.get("kind", "chance") for n in graph["nodes"] if n["id"] == source), "chance")
@@ -177,8 +182,14 @@ if len(graph["nodes"]) >= 2:
                 edge_label = st.text_input("Edge label (optional)", value=edge.get("label") or "")
                 current_prob = edge.get("data", {}).get("prob")
                 prob_enabled = st.checkbox("Add probability", value=current_prob is not None)
-                if prob_enabled:
-                    current_prob = st.number_input("Probability", min_value=0.0, max_value=1.0, step=0.01, value=current_prob or 0.5)
+                prob_value = st.number_input(
+                    "Probability",
+                    min_value=0.0,
+                    max_value=1.0,
+                    step=0.01,
+                    value=current_prob if current_prob is not None else 0.5,
+                    disabled=not prob_enabled,
+                )
                 update_btn = st.form_submit_button("Update edge")
             delete_btn = st.button("Delete edge", key=f"del_edge_{edge_id}")
             if update_btn:
@@ -195,7 +206,7 @@ if len(graph["nodes"]) >= 2:
                         "source": source,
                         "target": target,
                         "label": edge_label or None,
-                        "data": {"prob": current_prob} if prob_enabled else {},
+                        "data": {"prob": prob_value} if prob_enabled else {},
                     })
                     st.rerun()
             if delete_btn:
@@ -391,5 +402,15 @@ vis_html = f"""
 </html>
 """
 st.markdown("### Canvas")
+st.markdown(
+    """
+    <style>
+    div[data-testid=\"stHtml\"] > iframe {
+        width: 100% !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 # Allow the canvas to expand to fill available space without overlapping
 components.html(vis_html, height=800, scrolling=False)
