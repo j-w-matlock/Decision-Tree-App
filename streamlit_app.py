@@ -291,7 +291,9 @@ vis_html = f"""
   <style>
     html, body {{ height: 100%; margin: 0; background: #f8fafc; }}
     #network {{
-      height: 620px;
+      width: 100%;
+      height: 100%;
+      min-height: 620px;
       background: #f1f5f9;
       border-radius: 8px;
       border: 1px solid #cbd5e1;
@@ -356,4 +358,5 @@ vis_html = f"""
 </html>
 """
 st.markdown("### Canvas")
-components.html(vis_html, height=650, scrolling=False)
+# Allow the canvas to expand to fill available space without overlapping
+components.html(vis_html, height=800, scrolling=False)
