@@ -22,7 +22,10 @@ class Node:
 
     id: str
     label: str
-    kind: str  # ``event``, ``decision`` or ``result``
+    kind: str  # ``decision``, ``chance``, ``outcome`` or ``utility``
+    cost: Optional[float] = None
+    benefit: Optional[float] = None
+    value: Optional[float] = None
 
 
 @dataclass
@@ -41,6 +44,9 @@ class Pathway:
 
     steps: List[str]
     probability: float
+    cost: float = 0.0
+    benefit: float = 0.0
+    value: float = 0.0
 
 
 class DecisionTree:
@@ -60,7 +66,14 @@ class DecisionTree:
         """Create a :class:`DecisionTree` from a Streamlit ``graph`` dict."""
 
         nodes = [
-            Node(id=n["id"], label=n["data"]["label"], kind=n.get("kind", "event"))
+            Node(
+                id=n["id"],
+                label=n["data"]["label"],
+                kind=n.get("kind", "chance"),
+                cost=n.get("data", {}).get("cost"),
+                benefit=n.get("data", {}).get("benefit"),
+                value=n.get("data", {}).get("value"),
+            )
             for n in graph.get("nodes", [])
         ]
         edges = []
@@ -87,21 +100,24 @@ class DecisionTree:
 
         results: List[Pathway] = []
 
-        def dfs(node_id: str, path: List[str], prob: float) -> None:
+        def dfs(node_id: str, path: List[str], prob: float, cost: float, benefit: float, value: float) -> None:
             node = self.nodes[node_id]
             path.append(node.label)
+            cost += node.cost or 0.0
+            benefit += node.benefit or 0.0
+            value += node.value or 0.0
             children = self._outgoing.get(node_id)
             if not children:
-                results.append(Pathway(steps=path.copy(), probability=prob))
+                results.append(Pathway(steps=path.copy(), probability=prob, cost=cost, benefit=benefit, value=value))
             else:
                 for edge in children:
                     edge_steps = path + ([f"[{edge.label}]"] if edge.label else [])
                     edge_prob = edge.prob if edge.prob is not None else 1.0
-                    dfs(edge.target, edge_steps, prob * edge_prob)
+                    dfs(edge.target, edge_steps, prob * edge_prob, cost, benefit, value)
             path.pop()
 
         for root in self._roots():
-            dfs(root.id, [], 1.0)
+            dfs(root.id, [], 1.0, 0.0, 0.0, 0.0)
         return results
 
 

@@ -13,11 +13,45 @@ import "reactflow/dist/style.css";
 import { nanoid } from "nanoid";
 import { Streamlit, StreamlitComponentBase, withStreamlitConnection } from "streamlit-component-lib";
 import type { NodeData, EdgeData, NodeKind } from "./types";
+import type { CSSProperties } from "react";
 
 type Graph = { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] };
 
 function color(kind: NodeKind) {
-  return kind === "event" ? "#1d4ed8" : kind === "decision" ? "#16a34a" : "#f97316";
+  switch (kind) {
+    case "chance":
+      return "#1d4ed8";
+    case "decision":
+      return "#16a34a";
+    case "outcome":
+      return "#f97316";
+    case "utility":
+      return "#eab308";
+    default:
+      return "#777";
+  }
+}
+
+function shapeStyle(kind: NodeKind): CSSProperties {
+  const base: CSSProperties = {
+    border: `2px solid ${color(kind)}`,
+    background: "#fff",
+    width: 150,
+    height: 150,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+  switch (kind) {
+    case "chance":
+      return { ...base, borderRadius: "50%" };
+    case "outcome":
+      return { ...base, clipPath: "polygon(50% 0, 0 100%, 100% 100%)" };
+    case "utility":
+      return { ...base, clipPath: "polygon(50% 0, 100% 50%, 50% 100%, 0 50%)" };
+    default:
+      return base;
+  }
 }
 
 class App extends StreamlitComponentBase<any> {
@@ -41,7 +75,7 @@ class App extends StreamlitComponentBase<any> {
       type: "default",
       position: { x: 200, y: 100 },
       data: { label: `${kind} node`, kind },
-      style: { border: `2px solid ${color(kind)}`, background: "#fff", minWidth: 150 }
+      style: shapeStyle(kind),
     };
     this.setState((s: any) => ({ nodes: [...s.nodes, node] }));
   };
@@ -61,9 +95,10 @@ class App extends StreamlitComponentBase<any> {
     return (
       <div style={{ width: "100vw", height: "80vh" }}>
         <div className="toolbar">
-          <button onClick={() => this.addNode("event")}>+ Event</button>
           <button onClick={() => this.addNode("decision")}>+ Decision</button>
-          <button onClick={() => this.addNode("result")}>+ Result</button>
+          <button onClick={() => this.addNode("chance")}>+ Chance</button>
+          <button onClick={() => this.addNode("outcome")}>+ Outcome</button>
+          <button onClick={() => this.addNode("utility")}>+ Utility</button>
           <a
             href={`data:application/json,${encodeURIComponent(JSON.stringify({ nodes, edges }, null, 2))}`}
             download="decision_tree.json"

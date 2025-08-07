@@ -1,9 +1,9 @@
 {
   "nodes": [
-    {"id": "n_start", "data": {"label": "Start"}, "kind": "event"},
+    {"id": "n_start", "data": {"label": "Start"}, "kind": "chance"},
     {"id": "n_decide", "data": {"label": "Decision"}, "kind": "decision"},
-    {"id": "n_yes", "data": {"label": "Yes Outcome"}, "kind": "result"},
-    {"id": "n_no", "data": {"label": "No Outcome"}, "kind": "result"}
+    {"id": "n_yes", "data": {"label": "Yes Outcome"}, "kind": "outcome"},
+    {"id": "n_no", "data": {"label": "No Outcome"}, "kind": "outcome"}
   ],
   "edges": [
     {"id": "e_start_decide", "source": "n_start", "target": "n_decide", "label": null, "data": {}},
