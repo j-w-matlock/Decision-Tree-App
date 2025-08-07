@@ -77,6 +77,28 @@ with st.sidebar.expander("➕ Add Node", expanded=True):
             graph["nodes"].append({"id": new_node_id(), "data": {"label": new_label}, "kind": node_type})
             st.rerun()
 
+if graph["nodes"]:
+    with st.sidebar.expander("✏️ Edit Node", expanded=False):
+        node_options = {
+            n["id"]: f"{n['data']['label']} ({n.get('kind', 'event')})" for n in graph["nodes"]
+        }
+        node_id = st.selectbox("Node", list(node_options.keys()), format_func=lambda x: node_options[x])
+        node = next(n for n in graph["nodes"] if n["id"] == node_id)
+        with st.form(f"edit_node_form_{node_id}"):
+            label = st.text_input("Label", value=node["data"]["label"])
+            node_type = st.selectbox("Type", ["event", "decision", "result"], index=["event", "decision", "result"].index(node.get("kind", "event")))
+            update_btn = st.form_submit_button("Update node")
+        delete_btn = st.button("Delete node", key=f"del_node_{node_id}")
+        if update_btn:
+            node["data"]["label"] = label
+            node["kind"] = node_type
+            st.rerun()
+        if delete_btn:
+            graph["nodes"] = [n for n in graph["nodes"] if n["id"] != node_id]
+            graph["edges"] = [e for e in graph["edges"] if e["source"] != node_id and e["target"] != node_id]
+            st.success("Node deleted")
+            st.rerun()
+
 # ---------------------------
 # Sidebar – Edge Management
 # ---------------------------
@@ -138,6 +160,7 @@ if len(graph["nodes"]) >= 2:
                 if prob_enabled:
                     current_prob = st.number_input("Probability", min_value=0.0, max_value=1.0, step=0.01, value=current_prob or 0.5)
                 update_btn = st.form_submit_button("Update edge")
+            delete_btn = st.button("Delete edge", key=f"del_edge_{edge_id}")
             if update_btn:
                 src_kind = next((n.get("kind", "event") for n in graph["nodes"] if n["id"] == source), "event")
                 tgt_kind = next((n.get("kind", "event") for n in graph["nodes"] if n["id"] == target), "event")
@@ -155,6 +178,10 @@ if len(graph["nodes"]) >= 2:
                         "data": {"prob": current_prob} if prob_enabled else {},
                     })
                     st.rerun()
+            if delete_btn:
+                graph["edges"] = [e for e in graph["edges"] if e["id"] != edge_id]
+                st.success("Edge deleted")
+                st.rerun()
 
 # ---------------------------
 # Global Actions (Top Controls)
