@@ -7,58 +7,25 @@ import ReactFlow, {
   MarkerType,
   Connection,
   Node,
-  Edge
+  Edge,
+  NodeChange,
+  EdgeChange,
+  applyNodeChanges,
+  applyEdgeChanges,
+  ReactFlowInstance,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { nanoid } from "nanoid";
 import { Streamlit, StreamlitComponentBase, withStreamlitConnection } from "streamlit-component-lib";
-import type { NodeData, EdgeData, NodeKind } from "./types";
-import type { CSSProperties } from "react";
-
-type Graph = { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] };
-
-function color(kind: NodeKind) {
-  switch (kind) {
-    case "chance":
-      return "#1d4ed8";
-    case "decision":
-      return "#16a34a";
-    case "outcome":
-      return "#f97316";
-    case "utility":
-      return "#eab308";
-    default:
-      return "#777";
-  }
-}
-
-function shapeStyle(kind: NodeKind): CSSProperties {
-  const base: CSSProperties = {
-    border: `2px solid ${color(kind)}`,
-    background: "#fff",
-    width: 150,
-    height: 150,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  };
-  switch (kind) {
-    case "chance":
-      return { ...base, borderRadius: "50%" };
-    case "outcome":
-      return { ...base, clipPath: "polygon(50% 0, 0 100%, 100% 100%)" };
-    case "utility":
-      return { ...base, clipPath: "polygon(50% 0, 100% 50%, 50% 100%, 0 50%)" };
-    default:
-      return base;
-  }
-}
+import type { NodeData, EdgeData } from "./types";
 
 class App extends StreamlitComponentBase<any> {
   state = {
     nodes: (this.props.args?.value?.nodes ?? []) as Node<NodeData>[],
     edges: (this.props.args?.value?.edges ?? []) as Edge<EdgeData>[],
   };
+
+  reactFlowInstance: ReactFlowInstance | null = null;
 
   componentDidMount() {
     Streamlit.setFrameHeight();
@@ -69,24 +36,34 @@ class App extends StreamlitComponentBase<any> {
     Streamlit.setComponentValue({ nodes: this.state.nodes, edges: this.state.edges });
   }
 
-  addNode = (kind: NodeKind) => {
-    const node: Node<NodeData> = {
-      id: nanoid(),
-      type: "default",
-      position: { x: 200, y: 100 },
-      data: { label: `${kind} node`, kind },
-      style: shapeStyle(kind),
-    };
-    this.setState((s: any) => ({ nodes: [...s.nodes, node] }));
+  onNodesChange = (changes: NodeChange[]) => {
+    this.setState((s: any) => ({ nodes: applyNodeChanges(changes, s.nodes) }));
+  };
+
+  onEdgesChange = (changes: EdgeChange[]) => {
+    this.setState((s: any) => ({ edges: applyEdgeChanges(changes, s.edges) }));
   };
 
   onConnect = (conn: Connection) => {
     const e: Edge<EdgeData> = {
       ...conn,
       id: nanoid(),
-      markerEnd: { type: MarkerType.ArrowClosed }
+      markerEnd: { type: MarkerType.ArrowClosed },
     } as any;
     this.setState((s: any) => ({ edges: addEdge(e, s.edges) }));
+  };
+
+  onPaneContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
+    if (!this.reactFlowInstance) return;
+    const position = this.reactFlowInstance.project({ x: event.clientX, y: event.clientY });
+    const node: Node<NodeData> = {
+      id: nanoid(),
+      type: "default",
+      position,
+      data: { label: "New node" },
+    };
+    this.setState((s: any) => ({ nodes: [...s.nodes, node] }));
   };
 
   render() {
@@ -94,28 +71,17 @@ class App extends StreamlitComponentBase<any> {
 
     return (
       <div style={{ width: "100vw", height: "80vh" }}>
-        <div className="toolbar">
-          <button onClick={() => this.addNode("decision")}>+ Decision</button>
-          <button onClick={() => this.addNode("chance")}>+ Chance</button>
-          <button onClick={() => this.addNode("outcome")}>+ Outcome</button>
-          <button onClick={() => this.addNode("utility")}>+ Utility</button>
-          <a
-            href={`data:application/json,${encodeURIComponent(JSON.stringify({ nodes, edges }, null, 2))}`}
-            download="decision_tree.json"
-          >
-            💾 Export JSON
-          </a>
-        </div>
-
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={(changes) => this.setState({ nodes: changes })}
-          onEdgesChange={(changes) => this.setState({ edges: changes })}
+          onNodesChange={this.onNodesChange}
+          onEdgesChange={this.onEdgesChange}
           onConnect={this.onConnect}
+          onInit={(rf) => (this.reactFlowInstance = rf)}
+          onPaneContextMenu={this.onPaneContextMenu}
           fitView
         >
-          <MiniMap nodeStrokeWidth={3} />
+          <MiniMap />
           <Controls />
           <Background variant="dots" gap={12} size={1} />
         </ReactFlow>
@@ -125,3 +91,4 @@ class App extends StreamlitComponentBase<any> {
 }
 
 export default withStreamlitConnection(App);
+
