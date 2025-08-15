@@ -4,10 +4,9 @@ An interactive Streamlit app for freely creating and organising ideas as a mind 
 
 ## Features
 
-- Visual canvas for building mind maps
-- Right-click on the canvas to add new nodes
-- Edit or delete nodes and edges from the sidebar
-- Connect nodes with labelled edges
+- Visual canvas powered by [`streamlit-drawable-canvas`](https://github.com/andfanilo/streamlit-drawable-canvas)
+- Add, edit or delete nodes and edges from the sidebar
+- Drag nodes on the canvas to arrange them
 - Export or import the map structure as JSON
 
 ## Setup
@@ -26,11 +25,12 @@ An interactive Streamlit app for freely creating and organising ideas as a mind 
 
 ## Using the App
 
-1. **Right-click on the canvas** to add new nodes.
+1. **Add nodes** via the *Add Node* sidebar section.
 2. **Edit or delete nodes** via the *Edit Node* sidebar section. Deleting a node also removes its connected edges.
 3. **Add edges** between nodes using the sidebar and optionally provide a label.
 4. **Edit or delete edges** in the *Edit Edge* sidebar section.
-5. Use the **Actions** toolbar to export the current map to JSON, import a saved map or clear the canvas.
+5. **Drag nodes on the canvas** to reposition them.
+6. Use the **Actions** toolbar to export the current map to JSON, import a saved map or clear the canvas.
 
 ## Examples and Tutorials
 
