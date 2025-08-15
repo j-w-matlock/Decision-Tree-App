@@ -31,9 +31,14 @@ class App extends StreamlitComponentBase<any> {
     Streamlit.setFrameHeight();
   }
 
-  componentDidUpdate() {
+  componentDidUpdate(prevProps: any, prevState: any) {
     Streamlit.setFrameHeight();
-    Streamlit.setComponentValue({ nodes: this.state.nodes, edges: this.state.edges });
+    if (
+      prevState.nodes !== this.state.nodes ||
+      prevState.edges !== this.state.edges
+    ) {
+      Streamlit.setComponentValue({ nodes: this.state.nodes, edges: this.state.edges });
+    }
   }
 
   onNodesChange = (changes: NodeChange[]) => {
