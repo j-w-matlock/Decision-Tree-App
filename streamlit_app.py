@@ -14,6 +14,10 @@ def new_edge_id() -> str:
     return f"e_{uuid.uuid4().hex[:6]}"
 
 
+def new_node_id() -> str:
+    return f"n_{uuid.uuid4().hex[:6]}"
+
+
 # ---------------------------
 # Session state
 # ---------------------------
@@ -27,6 +31,16 @@ graph = st.session_state.graph
 # Sidebar – Node Management
 # ---------------------------
 st.sidebar.header("🛠 Node Management")
+
+with st.sidebar.expander("➕ Add Node", expanded=True):
+    with st.form("add_node_form", clear_on_submit=True):
+        node_label = st.text_input("Label")
+        add_node_btn = st.form_submit_button("Add node")
+    if add_node_btn and node_label:
+        graph["nodes"].append(
+            {"id": new_node_id(), "data": {"label": node_label}, "position": {"x": 0, "y": 0}}
+        )
+        st.rerun()
 
 if graph["nodes"]:
     with st.sidebar.expander("✏️ Edit Node", expanded=True):
