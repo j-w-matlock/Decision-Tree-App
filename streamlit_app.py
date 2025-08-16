@@ -38,7 +38,6 @@ with st.sidebar.expander("➕ Add Node", expanded=True):
         graph["nodes"].append(
             {"id": new_node_id(), "data": {"label": node_label}, "position": {"x": 0, "y": 0}}
         )
-        st.rerun()
 
 if graph["nodes"]:
     with st.sidebar.expander("✏️ Edit Node", expanded=True):
@@ -51,11 +50,9 @@ if graph["nodes"]:
         delete_btn = st.button("Delete node", key=f"del_node_{node_id}")
         if update_btn:
             node["data"]["label"] = label
-            st.rerun()
         if delete_btn:
             graph["nodes"] = [n for n in graph["nodes"] if n["id"] != node_id]
             graph["edges"] = [e for e in graph["edges"] if e["source"] != node_id and e["target"] != node_id]
-            st.rerun()
 
 
 # ---------------------------
@@ -73,6 +70,7 @@ if len(graph["nodes"]) >= 2:
                 "Target", [n["id"] for n in graph["nodes"] if n["id"] != source], format_func=lambda x: node_labels[x]
             )
             edge_label = st.text_input("Edge label (optional)")
+            edge_color = st.color_picker("Color", "#000000")
             add_edge_btn = st.form_submit_button("Add edge")
             if add_edge_btn:
                 if source == target:
@@ -81,9 +79,14 @@ if len(graph["nodes"]) >= 2:
                     st.warning("❌ Edge already exists.")
                 else:
                     graph["edges"].append(
-                        {"id": new_edge_id(), "source": source, "target": target, "label": edge_label or None}
+                        {
+                            "id": new_edge_id(),
+                            "source": source,
+                            "target": target,
+                            "label": edge_label or None,
+                            "color": edge_color,
+                        }
                     )
-                    st.rerun()
 
     if graph["edges"]:
         with st.sidebar.expander("✏️ Edit Edge", expanded=False):
@@ -98,6 +101,7 @@ if len(graph["nodes"]) >= 2:
                 target_idx = target_opts.index(edge["target"]) if edge["target"] in target_opts else 0
                 target = st.selectbox("Target", target_opts, index=target_idx, format_func=lambda x: node_labels[x])
                 edge_label = st.text_input("Edge label (optional)", value=edge.get("label") or "")
+                edge_color = st.color_picker("Color", value=edge.get("color", "#000000"))
                 update_btn = st.form_submit_button("Update edge")
             delete_btn = st.button("Delete edge", key=f"del_edge_{edge_id}")
             if update_btn:
@@ -108,11 +112,14 @@ if len(graph["nodes"]) >= 2:
                 ):
                     st.warning("❌ Edge already exists.")
                 else:
-                    edge.update({"source": source, "target": target, "label": edge_label or None})
-                    st.rerun()
+                    edge.update({
+                        "source": source,
+                        "target": target,
+                        "label": edge_label or None,
+                        "color": edge_color,
+                    })
             if delete_btn:
                 graph["edges"] = [e for e in graph["edges"] if e["id"] != edge_id]
-                st.rerun()
 
 
 # ---------------------------
@@ -134,12 +141,10 @@ with action_col2:
     uploaded = st.file_uploader("Upload JSON", type=["json"])
     if uploaded:
         st.session_state.graph = json.load(uploaded)
-        st.rerun()
 
 with action_col3:
     if st.button("🗑 Clear Canvas", use_container_width=True):
         st.session_state.graph = {"nodes": [], "edges": []}
-        st.rerun()
 
 
  # ---------------------------
@@ -160,8 +165,16 @@ for node in graph["nodes"]:
             "height": 50,
             "fontSize": 16,
             "backgroundColor": "#ffffff",
-            "strokeWidth": 1,
-            "stroke": "#000000",
+            "strokeWidth": 2,
+            "stroke": "#333333",
+            "rx": 8,
+            "ry": 8,
+            "shadow": {
+                "color": "rgba(0,0,0,0.1)",
+                "blur": 3,
+                "offsetX": 2,
+                "offsetY": 2,
+            },
             "editable": False,
             "name": node["id"],
         }
@@ -181,8 +194,8 @@ for edge in graph["edges"]:
             "y1": y1,
             "x2": x2,
             "y2": y2,
-            "stroke": "#000000",
-            "strokeWidth": 1,
+            "stroke": edge.get("color", "#000000"),
+            "strokeWidth": 3,
             "selectable": False,
             "evented": False,
             "name": edge["id"],
@@ -197,6 +210,7 @@ for edge in graph["edges"]:
                 "top": (y1 + y2) / 2,
                 "fontSize": 12,
                 "backgroundColor": "#ffffff",
+                "fill": edge.get("color", "#000000"),
                 "editable": False,
                 "selectable": False,
                 "evented": False,
