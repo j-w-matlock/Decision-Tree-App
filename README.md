@@ -6,7 +6,8 @@ An interactive Streamlit app for freely creating and organising ideas as a mind 
 
 - Visual canvas powered by [`streamlit-drawable-canvas`](https://github.com/andfanilo/streamlit-drawable-canvas)
 - Add, edit or delete nodes and edges from the sidebar
-- Drag nodes on the canvas to arrange them
+- Drag nodes on the canvas to arrange them without losing their position
+- Edges can be color-coded and are drawn with thicker lines for visibility
 - Export or import the map structure as JSON
 
 ## Setup
