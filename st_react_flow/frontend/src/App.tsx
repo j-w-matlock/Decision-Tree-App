@@ -26,6 +26,14 @@ class App extends StreamlitComponentBase<any> {
 
   componentDidUpdate(prevProps: any, prevState: any) {
     Streamlit.setFrameHeight();
+    const prevValue = prevProps.args?.value;
+    const currValue = this.props.args?.value;
+    if (prevValue !== currValue) {
+      this.setState({
+        nodes: (currValue?.nodes ?? []) as Node<NodeData>[],
+        edges: (currValue?.edges ?? []) as Edge<EdgeData>[],
+      });
+    }
     if (
       prevState.nodes !== this.state.nodes ||
       prevState.edges !== this.state.edges
@@ -46,12 +54,15 @@ class App extends StreamlitComponentBase<any> {
 
   render() {
     const { nodes, edges } = this.state;
+    const styledEdges = edges.map((e) =>
+      (e as any).color ? { ...e, style: { stroke: (e as any).color } } : e
+    );
 
     return (
       <div style={{ width: "100vw", height: "80vh" }}>
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={styledEdges}
           onNodesChange={this.onNodesChange}
           onEdgesChange={this.onEdgesChange}
           fitView

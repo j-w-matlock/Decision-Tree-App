@@ -2,7 +2,7 @@ import json
 import uuid
 
 import streamlit as st
-from streamlit_drawable_canvas import st_canvas
+from st_react_flow import react_flow
 
 st.set_page_config(page_title="Mind Map Builder", layout="wide")
 st.title("🧠 Mind Map Builder")
@@ -152,87 +152,9 @@ with action_col3:
  # ---------------------------
 st.markdown("### Canvas")
 
-# Build Fabric.js objects for nodes and edges
-objects = []
-for node in graph["nodes"]:
-    objects.append(
-        {
-            "type": "textbox",
-            "text": node["data"]["label"],
-            "left": node["position"].get("x", 0),
-            "top": node["position"].get("y", 0),
-            "width": 150,
-            "height": 50,
-            "fontSize": 16,
-            "backgroundColor": "#ffffff",
-            "strokeWidth": 2,
-            "stroke": "#333333",
-            "rx": 8,
-            "ry": 8,
-            "shadow": {
-                "color": "rgba(0,0,0,0.1)",
-                "blur": 3,
-                "offsetX": 2,
-                "offsetY": 2,
-            },
-            "editable": False,
-            "name": node["id"],
-        }
-    )
-
-for edge in graph["edges"]:
-    src = next(n for n in graph["nodes"] if n["id"] == edge["source"])
-    tgt = next(n for n in graph["nodes"] if n["id"] == edge["target"])
-    x1 = src["position"].get("x", 0) + 75
-    y1 = src["position"].get("y", 0) + 25
-    x2 = tgt["position"].get("x", 0) + 75
-    y2 = tgt["position"].get("y", 0) + 25
-    objects.append(
-        {
-            "type": "line",
-            "x1": x1,
-            "y1": y1,
-            "x2": x2,
-            "y2": y2,
-            "stroke": edge.get("color", "#000000"),
-            "strokeWidth": 3,
-            "selectable": False,
-            "evented": False,
-            "name": edge["id"],
-        }
-    )
-    if edge.get("label"):
-        objects.append(
-            {
-                "type": "textbox",
-                "text": edge["label"],
-                "left": (x1 + x2) / 2,
-                "top": (y1 + y2) / 2,
-                "fontSize": 12,
-                "backgroundColor": "#ffffff",
-                "fill": edge.get("color", "#000000"),
-                "editable": False,
-                "selectable": False,
-                "evented": False,
-                "name": f"label_{edge['id']}",
-            }
-        )
-
-canvas_result = st_canvas(
-    initial_drawing={"objects": objects},
-    height=600,
-    width=1000,
-    drawing_mode="transform",
-    background_color="#f0f0f0",
-    update_streamlit=True,
-    key="mindmap_canvas",
-)
-
-# Update node positions from canvas
-if canvas_result.json_data:
-    for obj in canvas_result.json_data.get("objects", []):
-        if obj.get("type") == "textbox" and obj.get("name") in {n["id"] for n in graph["nodes"]}:
-            node = next(n for n in graph["nodes"] if n["id"] == obj["name"])
-            node["position"] = {"x": obj.get("left", 0), "y": obj.get("top", 0)}
+result = react_flow(key="mindmap", value=graph)
+if result:
+    graph["nodes"] = result.get("nodes", [])
+    graph["edges"] = result.get("edges", [])
 
 
