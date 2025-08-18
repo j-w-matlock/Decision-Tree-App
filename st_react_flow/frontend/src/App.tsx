@@ -106,9 +106,25 @@ const Flow = (props: any) => {
     setViewport(vp);
   }, []);
 
-  const styledEdges = edges.map((e) =>
-    (e as any).color ? { ...e, style: { stroke: (e as any).color } } : e
-  );
+  const uniqueEdges = edges.filter((e, index, arr) => {
+    const hasRequired = e.id && e.source && e.target;
+    const duplicateIndex = arr.findIndex(
+      (other) =>
+        other.id === e.id &&
+        other.source === e.source &&
+        other.target === e.target
+    );
+    return hasRequired && duplicateIndex === index;
+  });
+
+  const styledEdges = uniqueEdges.map((e) => {
+    const style: any = { strokeWidth: 2 };
+    if ((e as any).color) {
+      style.stroke = (e as any).color;
+    }
+    const markerEnd = (e as any).markerEnd;
+    return markerEnd ? { ...e, style, markerEnd } : { ...e, style };
+  });
 
   return (
     <div style={{ width: "100vw", height: "80vh" }}>
@@ -118,6 +134,7 @@ const Flow = (props: any) => {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onMove={onMove}
+        defaultEdgeOptions={{ style: { strokeWidth: 2 }, type: 'straight' }}
       >
         <MiniMap />
         <Controls />
