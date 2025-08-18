@@ -3,10 +3,19 @@ import uuid
 
 import streamlit as st
 from st_react_flow import react_flow
+from streamlit_agraph import agraph, Node, Edge, Config
 
 st.set_page_config(page_title="Mind Map Builder", layout="wide")
+# Title and basic config
 st.title("🧠 Mind Map Builder")
 
+# ---------------------------
+# Canvas settings
+# ---------------------------
+st.sidebar.header("⚙️ Canvas Settings")
+canvas_renderer = st.sidebar.radio(
+    "Renderer", ["React Flow", "Agraph"], index=0, help="Choose the graph canvas implementation"
+)
 
 def new_edge_id() -> str:
     return f"e_{uuid.uuid4().hex[:6]}"
@@ -152,9 +161,26 @@ with action_col3:
  # ---------------------------
 st.markdown("### Canvas")
 
-result = react_flow(key="mindmap", value=graph)
-if result:
-    graph["nodes"] = result.get("nodes", [])
-    graph["edges"] = result.get("edges", [])
+if canvas_renderer == "React Flow":
+    result = react_flow(key="mindmap", value=graph)
+    if result:
+        graph["nodes"] = result.get("nodes", [])
+        graph["edges"] = result.get("edges", [])
+else:
+    agraph_nodes = [
+        Node(
+            id=n["id"],
+            label=n["data"]["label"],
+            x=n.get("position", {}).get("x"),
+            y=n.get("position", {}).get("y"),
+        )
+        for n in graph["nodes"]
+    ]
+    agraph_edges = [
+        Edge(source=e["source"], target=e["target"], label=e.get("label"), color=e.get("color"))
+        for e in graph["edges"]
+    ]
+    config = Config(width=750, height=500, directed=True)
+    agraph(nodes=agraph_nodes, edges=agraph_edges, config=config)
 
 
