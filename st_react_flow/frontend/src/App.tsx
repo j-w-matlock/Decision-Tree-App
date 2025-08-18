@@ -17,6 +17,8 @@ import "reactflow/dist/style.css";
 import { Streamlit, withStreamlitConnection } from "streamlit-component-lib";
 import type { NodeData, EdgeData } from "./types";
 
+const deepEqual = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b);
+
 const Flow = (props: any) => {
   const [nodes, setNodes] = useState<Node<NodeData>[]>(
     (props.args?.value?.nodes ?? []) as Node<NodeData>[]
@@ -28,6 +30,7 @@ const Flow = (props: any) => {
   const reactFlowInstance = useReactFlow();
   const hasFitView = useRef(false);
   const isInitialRender = useRef(true);
+  const prevValue = useRef<any>();
 
   useEffect(() => {
     Streamlit.setFrameHeight();
@@ -35,9 +38,39 @@ const Flow = (props: any) => {
 
   useEffect(() => {
     const value = props.args?.value;
-    setNodes((value?.nodes ?? []) as Node<NodeData>[]);
-    setEdges((value?.edges ?? []) as Edge<EdgeData>[]);
-  }, [props.args?.value]);
+    const previous = prevValue.current;
+
+    if (!value) {
+      if (previous) {
+        setNodes([]);
+        setEdges([]);
+        prevValue.current = value;
+      }
+      return;
+    }
+
+    if (!previous || !deepEqual(previous, value)) {
+      setNodes((prevNodes) => {
+        const prevMap = new Map(prevNodes.map((n) => [n.id, n]));
+        const incoming = (value.nodes ?? []) as Node<NodeData>[];
+        return incoming.map((n) => {
+          const existing = prevMap.get(n.id);
+          return existing ? { ...existing, ...n } : n;
+        });
+      });
+
+      setEdges((prevEdges) => {
+        const prevMap = new Map(prevEdges.map((e) => [e.id, e]));
+        const incoming = (value.edges ?? []) as Edge<EdgeData>[];
+        return incoming.map((e) => {
+          const existing = prevMap.get(e.id);
+          return existing ? { ...existing, ...e } : e;
+        });
+      });
+
+      prevValue.current = value;
+    }
+  });
 
   useEffect(() => {
     if (isInitialRender.current) {
