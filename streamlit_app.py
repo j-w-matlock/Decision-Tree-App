@@ -98,10 +98,15 @@ if len(graph["nodes"]) >= 2:
     node_labels = {n["id"]: n["data"]["label"] for n in graph["nodes"]}
 
     with st.sidebar.expander("➕ Add Edge", expanded=True):
-        with st.form("add_edge_form", clear_on_submit=True):
-            source = st.selectbox("Source", list(node_labels.keys()), format_func=lambda x: node_labels[x])
+        with st.form("add_edge_form"):
+            source = st.selectbox(
+                "Source", list(node_labels.keys()), format_func=lambda x: node_labels[x], key="add_edge_source"
+            )
             target = st.selectbox(
-                "Target", [n["id"] for n in graph["nodes"] if n["id"] != source], format_func=lambda x: node_labels[x]
+                "Target",
+                [n["id"] for n in graph["nodes"] if n["id"] != source],
+                format_func=lambda x: node_labels[x],
+                key="add_edge_target",
             )
             edge_label = st.text_input("Edge label (optional)")
             edge_color = st.color_picker("Color", "#000000")
