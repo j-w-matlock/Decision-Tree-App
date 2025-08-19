@@ -5,6 +5,18 @@ import streamlit as st
 from st_react_flow import react_flow
 from streamlit_agraph import agraph, Node, Edge, Config
 
+
+# Supported node shapes for the ``streamlit_agraph`` renderer
+NODE_SHAPES = [
+    "dot",
+    "square",
+    "triangle",
+    "triangleDown",
+    "star",
+    "hexagon",
+    "diamond",
+]
+
 st.set_page_config(page_title="Mind Map Builder", layout="wide")
 # Title and basic config
 st.title("🧠 Mind Map Builder")
@@ -42,10 +54,15 @@ st.sidebar.header("🛠 Node Management")
 with st.sidebar.expander("➕ Add Node", expanded=True):
     with st.form("add_node_form", clear_on_submit=True):
         node_label = st.text_input("Label")
+        node_shape = st.selectbox("Shape", NODE_SHAPES, index=0)
         add_node_btn = st.form_submit_button("Add node")
     if add_node_btn and node_label:
         graph["nodes"].append(
-            {"id": new_node_id(), "data": {"label": node_label}, "position": {"x": 0, "y": 0}}
+            {
+                "id": new_node_id(),
+                "data": {"label": node_label, "shape": node_shape},
+                "position": {"x": 0, "y": 0},
+            }
         )
 
 if graph["nodes"]:
@@ -55,10 +72,14 @@ if graph["nodes"]:
         node = next(n for n in graph["nodes"] if n["id"] == node_id)
         with st.form(f"edit_node_form_{node_id}"):
             label = st.text_input("Label", value=node["data"]["label"])
+            shape_val = node["data"].get("shape", "dot")
+            shape_index = NODE_SHAPES.index(shape_val) if shape_val in NODE_SHAPES else 0
+            shape = st.selectbox("Shape", NODE_SHAPES, index=shape_index)
             update_btn = st.form_submit_button("Update node")
         delete_btn = st.button("Delete node", key=f"del_node_{node_id}")
         if update_btn:
             node["data"]["label"] = label
+            node["data"]["shape"] = shape
         if delete_btn:
             graph["nodes"] = [n for n in graph["nodes"] if n["id"] != node_id]
             graph["edges"] = [e for e in graph["edges"] if e["source"] != node_id and e["target"] != node_id]
@@ -171,6 +192,7 @@ else:
         Node(
             id=n["id"],
             label=n["data"]["label"],
+            shape=n["data"].get("shape", "dot"),
             x=n.get("position", {}).get("x"),
             y=n.get("position", {}).get("y"),
         )
@@ -180,7 +202,7 @@ else:
         Edge(source=e["source"], target=e["target"], label=e.get("label"), color=e.get("color"))
         for e in graph["edges"]
     ]
-    config = Config(width=750, height=500, directed=True)
+    config = Config(width=750, height=500, directed=True, physics=False, stabilization=False)
     agraph(nodes=agraph_nodes, edges=agraph_edges, config=config)
 
 
