@@ -202,7 +202,13 @@ else:
         Edge(source=e["source"], target=e["target"], label=e.get("label"), color=e.get("color"))
         for e in graph["edges"]
     ]
-    config = Config(width=750, height=500, directed=True, physics=True, stabilization=True)
+    config = Config(
+        width=750,
+        height=500,
+        directed=True,
+        physics=False,
+        stabilization=False,
+    )
     agraph(nodes=agraph_nodes, edges=agraph_edges, config=config)
 
 
