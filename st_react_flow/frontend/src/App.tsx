@@ -74,7 +74,10 @@ const Flow = (props: any) => {
         const incoming = (value.nodes ?? []) as Node<NodeData>[];
         return incoming.map((n) => {
           const existing = prevMap.get(n.id);
-          return existing ? { ...existing, ...n } : n;
+          if (existing) {
+            return { ...existing, ...n, position: existing.position };
+          }
+          return n;
         });
       });
 
