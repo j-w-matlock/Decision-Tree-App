@@ -75,7 +75,12 @@ const Flow = (props: any) => {
         return incoming.map((n) => {
           const existing = prevMap.get(n.id);
           if (existing) {
-            return { ...existing, ...n, position: existing.position };
+            return {
+              ...existing,
+              ...n,
+              position: existing.position,
+              positionAbsolute: (existing as any).positionAbsolute,
+            };
           }
           return n;
         });
@@ -118,8 +123,9 @@ const Flow = (props: any) => {
   }, []);
 
   const onNodeDragStop = useCallback(() => {
-    updateStreamlit(nodes, edges);
-  }, [nodes, edges, updateStreamlit]);
+    const currentNodes = reactFlowInstance.getNodes();
+    updateStreamlit(currentNodes, edges);
+  }, [reactFlowInstance, edges, updateStreamlit]);
 
   const onEdgeUpdate = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {
