@@ -57,13 +57,17 @@ with st.sidebar.expander("➕ Add Node", expanded=True):
         node_shape = st.selectbox("Shape", NODE_SHAPES, index=0)
         add_node_btn = st.form_submit_button("Add node")
     if add_node_btn and node_label:
+        node_index = len(graph["nodes"])
+        offset = 50
+        position = {"x": node_index * offset, "y": node_index * offset}
         graph["nodes"].append(
             {
                 "id": new_node_id(),
                 "data": {"label": node_label, "shape": node_shape},
-                "position": {"x": 0, "y": 0},
+                "position": position,
             }
         )
+        st.session_state.graph = graph
 
 if graph["nodes"]:
     with st.sidebar.expander("✏️ Edit Node", expanded=True):
