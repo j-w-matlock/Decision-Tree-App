@@ -12,6 +12,8 @@ import ReactFlow, {
   applyEdgeChanges,
   ReactFlowProvider,
   useReactFlow,
+  addEdge,
+  Connection,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Streamlit, withStreamlitConnection } from "streamlit-component-lib";
@@ -29,12 +31,29 @@ const Flow = (props: any) => {
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const reactFlowInstance = useReactFlow();
   const hasFitView = useRef(false);
-  const isInitialRender = useRef(true);
   const prevValue = useRef<any>();
+  const debounceRef = useRef<number>();
+
+  const updateStreamlit = useCallback(
+    (n: Node<NodeData>[], e: Edge<EdgeData>[]) => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+      debounceRef.current = window.setTimeout(() => {
+        Streamlit.setComponentValue({ nodes: n, edges: e });
+      }, 300);
+    },
+    []
+  );
 
   useEffect(() => {
     Streamlit.setFrameHeight();
   });
+
+  useEffect(() => {
+    updateStreamlit(nodes, edges);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const value = props.args?.value;
@@ -72,13 +91,6 @@ const Flow = (props: any) => {
     }
   });
 
-  useEffect(() => {
-    if (isInitialRender.current) {
-      isInitialRender.current = false;
-      return;
-    }
-    Streamlit.setComponentValue({ nodes, edges });
-  }, [nodes, edges]);
 
   useEffect(() => {
     if (nodes.length > 0) {
@@ -101,6 +113,57 @@ const Flow = (props: any) => {
     const filtered = changes.filter((c) => c.type !== "remove");
     setEdges((eds) => applyEdgeChanges(filtered, eds));
   }, []);
+
+  const onNodeDragStop = useCallback(() => {
+    updateStreamlit(nodes, edges);
+  }, [nodes, edges, updateStreamlit]);
+
+  const onEdgeUpdate = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      setEdges((eds) => {
+        const index = eds.findIndex((e) => e.id === oldEdge.id);
+        if (index === -1) return eds;
+        const updated = [...eds];
+        updated[index] = { ...updated[index], ...newConnection };
+        updateStreamlit(nodes, updated);
+        return updated;
+      });
+    },
+    [nodes, updateStreamlit]
+  );
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      setEdges((eds) => {
+        const updated = addEdge(connection, eds);
+        updateStreamlit(nodes, updated);
+        return updated;
+      });
+    },
+    [nodes, updateStreamlit]
+  );
+
+  const onNodesDelete = useCallback(
+    (deleted: Node[]) => {
+      setNodes((nds) => {
+        const remaining = nds.filter((n) => !deleted.find((d) => d.id === n.id));
+        updateStreamlit(remaining, edges);
+        return remaining;
+      });
+    },
+    [edges, updateStreamlit]
+  );
+
+  const onEdgesDelete = useCallback(
+    (deleted: Edge[]) => {
+      setEdges((eds) => {
+        const remaining = eds.filter((e) => !deleted.find((d) => d.id === e.id));
+        updateStreamlit(nodes, remaining);
+        return remaining;
+      });
+    },
+    [nodes, updateStreamlit]
+  );
 
   const onMove = useCallback((_, vp: Viewport) => {
     setViewport(vp);
@@ -133,6 +196,11 @@ const Flow = (props: any) => {
         edges={styledEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDragStop={onNodeDragStop}
+        onEdgeUpdate={onEdgeUpdate}
+        onConnect={onConnect}
+        onNodesDelete={onNodesDelete}
+        onEdgesDelete={onEdgesDelete}
         onMove={onMove}
         defaultEdgeOptions={{ style: { strokeWidth: 2 }, type: 'straight' }}
       >
